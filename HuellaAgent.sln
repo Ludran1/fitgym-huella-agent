@@ -1,0 +1,36 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{554A7262-6705-40E0-8459-9AD6326379F4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HuellaAgent", "src\HuellaAgent\HuellaAgent.csproj", "{189577D1-4601-4AE5-8A00-9D575DDC1D2B}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{01396A7C-CE50-4512-A0E7-FF4A03179BFF}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HuellaAgent.Tests", "tests\HuellaAgent.Tests\HuellaAgent.Tests.csproj", "{9CE09D79-6F26-427C-AEA7-401D5A95F046}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{189577D1-4601-4AE5-8A00-9D575DDC1D2B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{189577D1-4601-4AE5-8A00-9D575DDC1D2B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{189577D1-4601-4AE5-8A00-9D575DDC1D2B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{189577D1-4601-4AE5-8A00-9D575DDC1D2B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9CE09D79-6F26-427C-AEA7-401D5A95F046}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9CE09D79-6F26-427C-AEA7-401D5A95F046}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9CE09D79-6F26-427C-AEA7-401D5A95F046}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9CE09D79-6F26-427C-AEA7-401D5A95F046}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{189577D1-4601-4AE5-8A00-9D575DDC1D2B} = {554A7262-6705-40E0-8459-9AD6326379F4}
+		{9CE09D79-6F26-427C-AEA7-401D5A95F046} = {01396A7C-CE50-4512-A0E7-FF4A03179BFF}
+	EndGlobalSection
+EndGlobal
