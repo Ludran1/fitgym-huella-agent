@@ -15,4 +15,17 @@
     <PackageReference Include="System.IO.Ports" Version="8.0.0" />
   </ItemGroup>
 
+  <!-- SDK ZKFinger REAL: solo al publicar para Windows x64. Define ZKFP (compila ZkfpDevice)
+       y referencia el wrapper oficial. En Linux/CI (sin RID) NO se referencia ni compila →
+       el build y los tests siguen siendo cross-platform con MockDevice. -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'win-x64'">
+    <DefineConstants>$(DefineConstants);ZKFP</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'win-x64'">
+    <Reference Include="libzkfpcsharp">
+      <HintPath>sdk/win-x64/libzkfpcsharp.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+
 </Project>

@@ -12,15 +12,14 @@ public static class DeviceFactory
 {
     public static IFingerprintDevice Create(AgentConfig cfg, ILogger? log = null)
     {
+#if ZKFP
+        // ZkfpDevice solo existe en builds win-x64 (define ZKFP). En Linux/CI no se compila.
         if (OperatingSystem.IsWindows() && cfg.UseRealDevice)
         {
-            try { return new ZkfpDevice(); }
-            catch (Exception ex)
-            {
-                log?.LogWarning(ex, "SDK real no disponible; usando MockDevice");
-                return new MockDevice();
-            }
+            try { return new ZkfpDevice(cfg); }
+            catch (Exception ex) { log?.LogWarning(ex, "SDK real no disponible; usando MockDevice"); }
         }
+#endif
         return new MockDevice();
     }
 }

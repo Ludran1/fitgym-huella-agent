@@ -36,10 +36,26 @@ entero (enroll → identify → marcar asistencia) sin SDK ni lector.
 
 ## Producción (Windows, con SDK + lector) — Fase 6
 
-1. Bajar el **ZKFinger SDK** (Windows) y soltar `libzkfp.dll` / `libzkfpcsharp.dll` junto al exe.
-2. Verificar las firmas P/Invoke de `Devices/ZkfpNative.cs` contra el header del SDK.
-3. `Agent:UseRealDevice = true` → DI usa `ZkfpDevice` en vez de `MockDevice`.
-4. 🔴 **R1**: calibrar `Agent:IdentifyThreshold` (FAR/FRR) con dedos reales antes de piloto.
+Integra el **ZKFinger SDK 5.3.0.33** vía el wrapper oficial `libzkfpcsharp` (clase
+`zkfp2`), igual que el demo del SDK (`C#/Demo2/Form1.cs`). El wrapper x64 está vendoreado
+en `src/HuellaAgent/sdk/win-x64/libzkfpcsharp.dll` y solo se referencia al publicar para
+win-x64 (define `ZKFP`); en Linux/CI no se compila → build/test cross-platform.
+
+**Build del .exe (se puede hacer DESDE Linux):**
+```bash
+dotnet publish src/HuellaAgent -r win-x64 --self-contained -c Release -p:PublishSingleFile=true
+```
+El wrapper queda embebido en `HuellaAgent.exe`. (Ya verificado que compila.)
+
+**En la PC Windows:**
+1. Correr el **`setup.exe`** del SDK → instala el **driver USB** + el `libzkfp.dll` **nativo**
+   (que `libzkfpcsharp` P/Invoca en runtime). Enchufar el SLK20R.
+2. (Opcional pero recomendado) Correr el **Demo del SDK** primero para confirmar que el
+   lector captura, aislado de este agente.
+3. Copiar `HuellaAgent.exe` + `appsettings.json` con `Agent:UseRealDevice = true`.
+4. Correr el exe → `/health` debe dar `reader: connected`.
+5. 🔴 **R1**: calibrar `Agent:IdentifyThreshold` (FAR/FRR) con dedos reales antes de piloto
+   (admitir al cliente equivocado es el peor fallo del producto).
 
 ## Torniquete (Fase 7, opcional por gym)
 
@@ -54,7 +70,8 @@ src/HuellaAgent/
   Program.cs                 host Kestrel :8000 (solo localhost), DI, CORS
   Config/AgentConfig.cs      puerto, api-key, timeouts, supabase, torniquete
   Api/FingerprintEndpoints.cs los endpoints del contrato + turnstile
-  Devices/IFingerprintDevice MockDevice (Linux) · ZkfpDevice + ZkfpNative (Windows)
+  Devices/IFingerprintDevice MockDevice (Linux) · ZkfpDevice (Windows, wrapper zkfp2)
+  sdk/win-x64/libzkfpcsharp.dll   wrapper oficial ZKFinger 5.3.0.33 (ref solo en win-x64)
   Storage/LocalFileStore.cs  templates en JSON local (offline-resiliente)
   Relays/IRelay.cs           MockRelay (dev) · UsbRelay (Windows, serial)
   Supabase/HuellaRpc.cs      persistencia durable opcional (anon key + kiosk_token)
