@@ -54,9 +54,16 @@ if (rpc.Enabled)
 {
     try
     {
-        var rows = await rpc.TemplatesAsync(CancellationToken.None);
-        foreach (var r in rows) await store.SaveAsync(runCfg.KioskToken, r.ClienteId, r.Template);
-        startLog.LogInformation("Carga inicial: {Count} templates desde Supabase", rows.Count);
+        var result = await rpc.TemplatesAsync(CancellationToken.None);
+        if (result is not null)
+        {
+            // Keyear el cache local por el tenant_id REAL (el que manda el frontend en
+            // enroll/identify), no por el token → si no, el identify no encontraría nada.
+            foreach (var r in result.Templates)
+                await store.SaveAsync(result.TenantId, r.ClienteId, r.Template);
+            startLog.LogInformation("Carga inicial: {Count} templates desde Supabase (tenant {Tid})",
+                result.Templates.Count, result.TenantId);
+        }
     }
     catch (Exception ex) { startLog.LogWarning(ex, "No se pudo cargar templates al inicio (sigue offline)"); }
 }

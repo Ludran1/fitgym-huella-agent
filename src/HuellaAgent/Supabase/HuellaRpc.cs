@@ -58,20 +58,31 @@ public sealed class HuellaRpc
         return null;
     }
 
-    /// <summary>huella_templates(token) → todos los templates del tenant (carga inicial).</summary>
-    public async Task<IReadOnlyList<StoredTemplate>> TemplatesAsync(CancellationToken ct)
+    /// <summary>Resultado de huella_templates: el tenant_id (para keyear el cache local) + sus templates.</summary>
+    public sealed record TemplatesResult(string TenantId, IReadOnlyList<StoredTemplate> Templates);
+
+    /// <summary>huella_templates(token) → {ok, tenant_id, templates} del tenant (carga inicial).</summary>
+    public async Task<TemplatesResult?> TemplatesAsync(CancellationToken ct)
     {
-        if (!Enabled) return Array.Empty<StoredTemplate>();
+        if (!Enabled) return null;
         var resp = await _http.PostAsJsonAsync("huella_templates", new { p_token = _cfg.KioskToken }, ct);
-        if (!resp.IsSuccessStatusCode) return Array.Empty<StoredTemplate>();
-        var rows = await resp.Content.ReadFromJsonAsync<List<RpcTemplate>>(cancellationToken: ct);
-        return rows?.Select(r => new StoredTemplate
+        if (!resp.IsSuccessStatusCode)
+        {
+            _log.LogWarning("huella_templates fallo: {Status}", resp.StatusCode);
+            return null;
+        }
+        var payload = await resp.Content.ReadFromJsonAsync<RpcTemplatesResponse>(cancellationToken: ct);
+        if (payload is null || !payload.ok || string.IsNullOrEmpty(payload.tenant_id)) return null;
+
+        var list = (payload.templates ?? new()).Select(r => new StoredTemplate
         {
             ClienteId = r.cliente_id ?? "",
             Uid = r.uid,
             Template = r.template ?? "",
-        }).ToList() ?? new();
+        }).ToList();
+        return new TemplatesResult(payload.tenant_id, list);
     }
 
+    private sealed record RpcTemplatesResponse(bool ok, string? tenant_id, List<RpcTemplate>? templates);
     private sealed record RpcTemplate(string? cliente_id, int uid, string? template);
 }
