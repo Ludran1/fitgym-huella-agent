@@ -57,24 +57,32 @@ El wrapper queda embebido en `HuellaAgent.exe`. (Ya verificado que compila.)
 5. 🔴 **R1**: calibrar `Agent:IdentifyThreshold` (FAR/FRR) con dedos reales antes de piloto
    (admitir al cliente equivocado es el peor fallo del producto).
 
-## Servicio de Windows (autostart)
+## Autostart en la PC de recepción
 
-En una PC de recepción el agente debe **arrancar solo** (no depender de que alguien abra el
-exe). El `Program.cs` ya llama `UseWindowsService()` (el mismo exe corre como consola o como
-servicio, auto-detectado). Para registrarlo:
+El agente debe **arrancar solo** (no depender de que alguien abra el exe). Hay 2 formas; en
+campo (2026-06-15) se confirmó cuál sirve para el **lector USB**:
 
+### ✅ Tarea al iniciar sesión (USAR ESTA) — `instalar-tarea.bat`
 ```
-scripts/windows/instalar-servicio.bat       (clic derecho -> Ejecutar como administrador)
-scripts/windows/desinstalar-servicio.bat
+scripts/windows/instalar-tarea.bat     (clic derecho -> Ejecutar como administrador)
+scripts/windows/desinstalar-tarea.bat
+scripts/windows/run-hidden.vbs         (lanza el exe sin ventana; lo usa la tarea)
 ```
+Crea una tarea programada `FitGymHuellaAgent` con trigger **onlogon** que corre el agente en
+la **sesión interactiva del usuario** (oculto, vía `run-hidden.vbs`). Ahí el lector USB **sí**
+se ve. Quita el servicio viejo y limpia `%ProgramData%\HuellaAgent` (lo recrea como usuario).
 
-`instalar-servicio.bat` registra `HuellaAgent` con `start= auto` (arranca con Windows) +
-`sc failure` (se reinicia solo si crashea), apuntando al `HuellaAgent.exe` que esté junto al
-script. Corre como **LocalSystem**; el store va a `%ProgramData%\HuellaAgent\templates.json`.
+### ❌ Servicio de Windows — `instalar-servicio.bat` (NO sirve con el SLK20R)
+`Program.cs` soporta `UseWindowsService()`, pero como **LocalSystem (Session 0)** el SDK
+ZKFinger **no accede al USB** → `ZkfpDevice` falla y cae a `MockDevice` (el `/health` dice
+`device: "MockDevice (SLK20R simulado)"` aunque `reader: connected`). Confirmado en campo: a
+mano (consola, sesión de usuario) da `ZKTeco SLK20R`; como servicio da Mock. Por eso se usa la
+**tarea al logon**, no el servicio. Los scripts del servicio quedan por si algún hardware ZK sí
+funciona en Session 0, pero el SLK20R no.
 
-⚠️ Verificar tras instalar: abrir `http://localhost:8000/health` → `reader: connected`. Si como
-servicio diera `disconnected` pero como consola da `connected`, es el aislamiento de Session 0
-(USB en servicios); en ese caso correr el servicio como el usuario logueado de la recepción.
+⚠️ Verificar tras instalar la tarea: `http://localhost:8000/health` → debe decir
+`device: "ZKTeco SLK20R"` (NO MockDevice). Si dice Mock, el lector no está enchufado o el
+agente arrancó en Session 0.
 
 ## Torniquete (Fase 7, opcional por gym)
 
