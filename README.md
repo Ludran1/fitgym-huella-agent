@@ -57,6 +57,25 @@ El wrapper queda embebido en `HuellaAgent.exe`. (Ya verificado que compila.)
 5. 🔴 **R1**: calibrar `Agent:IdentifyThreshold` (FAR/FRR) con dedos reales antes de piloto
    (admitir al cliente equivocado es el peor fallo del producto).
 
+## Servicio de Windows (autostart)
+
+En una PC de recepción el agente debe **arrancar solo** (no depender de que alguien abra el
+exe). El `Program.cs` ya llama `UseWindowsService()` (el mismo exe corre como consola o como
+servicio, auto-detectado). Para registrarlo:
+
+```
+scripts/windows/instalar-servicio.bat       (clic derecho -> Ejecutar como administrador)
+scripts/windows/desinstalar-servicio.bat
+```
+
+`instalar-servicio.bat` registra `HuellaAgent` con `start= auto` (arranca con Windows) +
+`sc failure` (se reinicia solo si crashea), apuntando al `HuellaAgent.exe` que esté junto al
+script. Corre como **LocalSystem**; el store va a `%ProgramData%\HuellaAgent\templates.json`.
+
+⚠️ Verificar tras instalar: abrir `http://localhost:8000/health` → `reader: connected`. Si como
+servicio diera `disconnected` pero como consola da `connected`, es el aislamiento de Session 0
+(USB en servicios); en ese caso correr el servicio como el usuario logueado de la recepción.
+
 ## Torniquete (Fase 7, opcional por gym)
 
 Módulo **USB-relé 1 canal** (entrada). Salida = botón mecánico directo al torniquete.
