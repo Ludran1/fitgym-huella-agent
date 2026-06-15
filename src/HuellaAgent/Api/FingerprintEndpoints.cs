@@ -12,6 +12,7 @@ public sealed record CaptureReq(int? Timeout);
 public sealed record EnrollReq(string ClienteId, string TenantId, string Template1, string Template2, string Template3);
 public sealed record IdentifyReq(string TenantId);
 public sealed record TurnstileReq(string TenantId);
+public sealed record PairReq(string Token, string SupabaseUrl, string AnonKey);
 
 /// <summary>
 /// Los 4 endpoints que consume src/lib/huellaApi.ts (contrato LOCKEADO) + un endpoint
@@ -22,13 +23,14 @@ public static class FingerprintEndpoints
     public static void Map(WebApplication app)
     {
         // ── GET /health (sin api-key: el chip de estado lo pollea siempre) ──────────
-        app.MapGet("/health", async (IFingerprintDevice device, ITemplateStore store) =>
+        app.MapGet("/health", async (IFingerprintDevice device, ITemplateStore store, HuellaRpc rpc) =>
             TypedResults.Json(new
             {
                 ok = true,
                 reader = device.IsConnected ? "connected" : "disconnected",
                 device = device.DeviceName,
                 templates_loaded = await store.CountAsync(),
+                durable = rpc.Enabled,   // true = vinculado a Supabase (pairing o appsettings)
             }));
 
         // ── /api/fingerprint/* (api-key opcional) ───────────────────────────────────
@@ -89,6 +91,30 @@ public static class FingerprintEndpoints
             if (!cfg.TurnstileEnabled) return Results.Json(new { ok = false, detail = "torniquete deshabilitado" }, statusCode: 409);
             await relay.PulseAsync(cfg.RelayPulseMs, ct);
             return Results.Json(new { ok = true });
+        }).AddEndpointFilter(ApiKeyFilter);
+
+        // ── POST /api/pair {token, supabase_url, anon_key} (pairing 1-clic desde la app) ──
+        // El admin (logueado, en la PC de recepción) manda el kiosk_token de su gym + la
+        // url/anon-key públicas. El agente valida con kiosk_init, lo cifra (DPAPI) y prende
+        // durable SIN reiniciar. Solo localhost; el token es secreto del propio gym.
+        app.MapPost("/api/pair", async (PairReq body, HuellaRpc rpc, PairingStore pairing, ITemplateStore store, CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(body.Token) || string.IsNullOrWhiteSpace(body.SupabaseUrl) || string.IsNullOrWhiteSpace(body.AnonKey))
+                return Results.Json(new { ok = false, detail = "faltan campos" }, statusCode: 400);
+
+            var creds = new DurableCreds(body.SupabaseUrl, body.AnonKey, body.Token);
+            var (ok, tenantId, gym) = await rpc.ValidateAsync(creds, ct);
+            if (!ok || string.IsNullOrEmpty(tenantId))
+                return Results.Json(new { ok = false, detail = "token invalido o gym suspendido" }, statusCode: 401);
+
+            pairing.Save(new Pairing(body.Token, body.SupabaseUrl, body.AnonKey, tenantId));
+
+            // Carga inicial de templates del tenant al cache local.
+            var res = await rpc.TemplatesAsync(ct);
+            if (res is not null)
+                foreach (var r in res.Templates) await store.SaveAsync(res.TenantId, r.ClienteId, r.Template);
+
+            return Results.Json(new { ok = true, tenant_id = tenantId, gym, templates = res?.Templates.Count ?? 0 });
         }).AddEndpointFilter(ApiKeyFilter);
     }
 

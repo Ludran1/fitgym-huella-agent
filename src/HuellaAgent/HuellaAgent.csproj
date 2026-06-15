@@ -13,6 +13,8 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="8.0.1" />
     <PackageReference Include="System.IO.Ports" Version="8.0.0" />
+    <!-- DPAPI para cifrar el token de pairing en disco (Windows). En Linux/dev se guarda plano. -->
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
   </ItemGroup>
 
   <!-- SDK ZKFinger REAL: solo al publicar para Windows x64. Define ZKFP (compila ZkfpDevice)

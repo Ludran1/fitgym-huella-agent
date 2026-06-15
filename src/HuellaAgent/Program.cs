@@ -34,6 +34,8 @@ builder.Services.AddCors(o => o.AddDefaultPolicy(p => p.AllowAnyOrigin().AllowAn
 
 builder.Services.AddSingleton<ITemplateStore>(sp =>
     new LocalFileStore(sp.GetRequiredService<AgentConfig>().StoragePath));
+builder.Services.AddSingleton(sp => new PairingStore(
+    Path.Combine(Path.GetDirectoryName(sp.GetRequiredService<AgentConfig>().StoragePath) ?? ".", "pairing.dat")));
 builder.Services.AddSingleton<IFingerprintDevice>(sp =>
     DeviceFactory.Create(sp.GetRequiredService<AgentConfig>(), sp.GetRequiredService<ILogger<Program>>()));
 builder.Services.AddSingleton<IRelay>(sp =>
