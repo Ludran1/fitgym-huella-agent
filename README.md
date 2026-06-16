@@ -84,6 +84,24 @@ funciona en Session 0, pero el SLK20R no.
 `device: "ZKTeco SLK20R"` (NO MockDevice). Si dice Mock, el lector no está enchufado o el
 agente arrancó en Session 0.
 
+## Auto-update + cómo releasear una versión nueva
+
+El agente se **auto-actualiza** al iniciar sesión. `launch.ps1` (lo corre `run-hidden.vbs`
+en la tarea al logon, oculto) chequea el último release en
+`github.com/Ludran1/fitgym-huella-agent-dist`; si el **tag > `version.txt` local**, baja el
+ZIP, reemplaza el exe (guarda `HuellaAgent.exe.bak`) y arranca. Best-effort: sin internet
+sigue con la versión actual. Como corre **al logon** (sin agente corriendo) el swap del exe
+es seguro.
+
+**Para sacar una versión nueva (que se auto-distribuya a todos los gyms):**
+1. Subir `<Version>` en `HuellaAgent.csproj` (ej. `1.0.1`).
+2. Compilar: `dotnet publish src/HuellaAgent -r win-x64 --self-contained -c Release -p:PublishSingleFile=true`.
+3. Rearmar el ZIP del dist con el exe nuevo + `version.txt` = la versión nueva (ej. `1.0.1`).
+4. `gh release create v1.0.1 HuellaAgent-Setup.zip --repo Ludran1/fitgym-huella-agent-dist ...`
+   (o `gh release upload` si reusás un tag).
+5. Cada gym se actualiza solo en el próximo reinicio. ⚠️ Probar antes de releasear — un build
+   roto se empuja a todos; el `.bak` permite rollback manual.
+
 ## Torniquete (Fase 7, opcional por gym)
 
 Módulo **USB-relé 1 canal** (entrada). Salida = botón mecánico directo al torniquete.
