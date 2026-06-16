@@ -20,6 +20,9 @@ public sealed record PairReq(string Token, string SupabaseUrl, string AnonKey);
 /// </summary>
 public static class FingerprintEndpoints
 {
+    private static readonly string Version =
+        System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
+
     public static void Map(WebApplication app)
     {
         // ── GET /health (sin api-key: el chip de estado lo pollea siempre) ──────────
@@ -31,6 +34,7 @@ public static class FingerprintEndpoints
                 device = device.DeviceName,
                 templates_loaded = await store.CountAsync(),
                 durable = rpc.Enabled,   // true = vinculado a Supabase (pairing o appsettings)
+                version = Version,
             }));
 
         // ── /api/fingerprint/* (api-key opcional) ───────────────────────────────────
