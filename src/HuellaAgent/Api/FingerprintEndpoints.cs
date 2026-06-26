@@ -37,6 +37,24 @@ public static class FingerprintEndpoints
                 version = Version,
             }));
 
+        // ── GET /logs?lines=N (sin api-key: visor de errores en el navegador) ───────
+        // El agente corre oculto → esto deja ver los ultimos logs sin buscar el archivo.
+        // Lee el log mas reciente de %ProgramData%\HuellaAgent\logs (Serilog, shared).
+        app.MapGet("/logs", (AgentConfig cfg, int? lines) =>
+        {
+            var dir = Path.Combine(Path.GetDirectoryName(cfg.StoragePath) ?? ".", "logs");
+            if (!Directory.Exists(dir)) return Results.Text("(sin logs todavia)", "text/plain; charset=utf-8");
+            var file = new DirectoryInfo(dir).GetFiles("agent-*.log")
+                .OrderByDescending(f => f.LastWriteTimeUtc).FirstOrDefault();
+            if (file is null) return Results.Text("(sin logs todavia)", "text/plain; charset=utf-8");
+
+            var n = Math.Clamp(lines ?? 200, 1, 2000);
+            var all = ReadLinesShared(file.FullName);   // FileShare.ReadWrite: Serilog lo tiene abierto
+            var tail = all.Length <= n ? all : all[^n..];
+            return Results.Text($"# {file.Name} (ultimas {tail.Length} lineas)\n" + string.Join("\n", tail),
+                "text/plain; charset=utf-8");
+        });
+
         // ── /api/fingerprint/* (api-key opcional) ───────────────────────────────────
         var api = app.MapGroup("/api/fingerprint").AddEndpointFilter(ApiKeyFilter);
 
@@ -134,6 +152,21 @@ public static class FingerprintEndpoints
 
             return Results.Json(new { ok = true, tenant_id = tenantId, gym, templates = res?.Templates.Count ?? 0 });
         }).AddEndpointFilter(ApiKeyFilter);
+    }
+
+    /// <summary>Lee todas las lineas de un archivo que otro proceso (Serilog) tiene abierto.</summary>
+    private static string[] ReadLinesShared(string path)
+    {
+        try
+        {
+            using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var sr = new StreamReader(fs);
+            var lines = new List<string>();
+            string? line;
+            while ((line = sr.ReadLine()) is not null) lines.Add(line);
+            return lines.ToArray();
+        }
+        catch (Exception ex) { return new[] { $"(no se pudo leer el log: {ex.Message})" }; }
     }
 
     /// <summary>Si AgentConfig.ApiKey esta seteada, exige el header x-api-key.</summary>

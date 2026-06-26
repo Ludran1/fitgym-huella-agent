@@ -9,12 +9,16 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <!-- Versión del agente: el launcher (launch.ps1) la compara contra el tag del último
          release en GitHub para auto-actualizar. Subir esto en cada release nuevo. -->
-    <Version>1.0.1</Version>
+    <Version>1.0.2</Version>
     <!-- El agente es Windows en produccion, pero compila/testea en Linux (MockDevice). -->
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="8.0.1" />
+    <!-- Logging a archivo persistente (%ProgramData%\HuellaAgent\logs) + consola. -->
+    <PackageReference Include="Serilog.AspNetCore" Version="8.0.3" />
+    <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
     <PackageReference Include="System.IO.Ports" Version="8.0.0" />
     <!-- DPAPI para cifrar el token de pairing en disco (Windows). En Linux/dev se guarda plano. -->
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
