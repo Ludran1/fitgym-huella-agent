@@ -79,6 +79,23 @@ public class ContractTests
     }
 
     [Fact]
+    public async Task Enroll_without_pairing_reports_durable_false()
+    {
+        using var f = new AgentFactory();
+        var client = f.CreateClient();
+
+        // Sin pairing (rpc deshabilitado) el enroll guarda local pero NO en la nube.
+        // Debe responder durable=false para que el frontend avise (no es exito real).
+        var raw = "{\"cliente_id\":\"cliA1\",\"tenant_id\":\"tenantA\"," +
+                  "\"template1\":\"t1\",\"template2\":\"t2\",\"template3\":\"t3\"}";
+        var res = await client.PostAsync("/api/fingerprint/enroll", Json(raw));
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+        var body = await ReadJson(res);
+        Assert.True(body.GetProperty("ok").GetBoolean());
+        Assert.False(body.GetProperty("durable").GetBoolean());
+    }
+
+    [Fact]
     public async Task Identify_match_returns_cliente_id()
     {
         using var f = new AgentFactory();

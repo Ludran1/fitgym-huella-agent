@@ -17,7 +17,7 @@ hace el kiosko con `kiosk_marcar_asistencia` (que ya existe).
 |---|---|---|
 | `GET /health` | — | `{ok, reader, device, templates_loaded}` |
 | `POST /api/fingerprint/capture` | `{timeout}` | `{template, quality}` · 408 sin dedo |
-| `POST /api/fingerprint/enroll` | `{cliente_id, tenant_id, template1..3}` | `{ok, uid}` |
+| `POST /api/fingerprint/enroll` | `{cliente_id, tenant_id, template1..3}` | `{ok, uid, durable}` · 409 si vinculado a otro gym (no persistió en la nube). `durable:false` = guardado solo local (sin vincular) |
 | `POST /api/fingerprint/identify` | `{tenant_id}` | 200 `{ok, cliente_id, score}` · 404 sin match · 408 sin dedo |
 | `POST /api/turnstile/open` | `{tenant_id}` | `{ok}` · Fase 7 (torniquete, opcional) |
 

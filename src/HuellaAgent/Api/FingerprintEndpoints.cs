@@ -64,8 +64,22 @@ public static class FingerprintEndpoints
             catch (Exception ex) { return Results.Json(new { ok = false, detail = $"merge fallo: {ex.Message}" }, statusCode: 422); }
 
             var uid = await store.SaveAsync(body.TenantId, body.ClienteId, merged);
-            if (rpc.Enabled) await rpc.EnrollAsync(body.ClienteId, merged, ct);   // mirror durable opcional
-            return Results.Json(new { ok = true, uid });
+
+            // Persistencia durable. ANTES esto era "best-effort" e ignoraba el resultado:
+            // si el agente estaba vinculado a OTRO gym, huella_enroll devolvia ok:false y
+            // el agente IGUAL respondia ok:true → la huella quedaba SOLO en el dispositivo
+            // (se pierde al reiniciar, no sincroniza, no anda en otra PC). El frontend
+            // mostraba "exito" pero la tabla huellas seguia vacia. Ahora se reporta el hecho.
+            if (!rpc.Enabled)
+                // Sin vincular: guardado local-only. durable=false → el frontend avisa
+                // (en un gym la huella DEBE persistir en la nube; no es exito real).
+                return Results.Json(new { ok = true, uid, durable = false });
+
+            var durableUid = await rpc.EnrollAsync(body.ClienteId, merged, ct);
+            if (durableUid is null)
+                return Results.Json(new { ok = false, detail = "Guardado en el lector pero NO en la nube: el lector esta vinculado a otro gym o el cliente no pertenece a este gym. Re-vincula el lector (Configuracion -> Lector de huella) y volve a enrolar." }, statusCode: 409);
+
+            return Results.Json(new { ok = true, uid, durable = true });
         });
 
         // POST identify {tenant_id} → 200 {ok, cliente_id, score} · 404 sin match · 408 sin dedo
