@@ -4,6 +4,9 @@ Agente local del lector de huella **ZKTeco SLK20R** para FitGym. Corre en la PC 
 recepción (Windows en producción), expone una API HTTP en `http://localhost:8000` y la
 consume el navegador del kiosko (`src/lib/huellaApi.ts`). Ver PRD vault doc 39.
 
+> **[docs/ARQUITECTURA.md](docs/ARQUITECTURA.md)** — cómo encaja cada capa, los dos flujos,
+> dónde viven las huellas, la lección del autostart y los riesgos abiertos.
+
 ## Por qué local
 
 El SLK20R es **USB** → lo lee un proceso en la misma PC donde está enchufado, no un
