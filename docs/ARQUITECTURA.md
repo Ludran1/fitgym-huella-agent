@@ -227,6 +227,18 @@ Nunca abre con membresía vencida ni con el cupo de clases agotado.
 El cliente se auto-desactiva tras el primer `409`, así los gimnasios sin torniquete no
 pagan un request por cada entrada.
 
+**Probado en las dos direcciones el 2026-09-08**, con lector y relé reales:
+
+| Caso | Resultado |
+|---|---|
+| 3 socios vigentes, huellas consecutivas | 3 asistencias, **3 pulsos**, 1.5–2 s de latencia |
+| 1 socio con membresía vencida | huella identificada, `accesos_denegados.motivo = expired`, **relé mudo** |
+
+El caso negativo es el que importa: la huella **sí matcheó** —el lector identificó a la
+persona— y lo que frenó fue el gate de membresía. El freno está en la capa correcta, no en
+el relé. La latencia de 1.5–2 s viene casi entera del ciclo de `identify` (ventana de 4 s +
+250 ms de pausa), no del pulso; la elimina el scanner continuo de v1.0.3.
+
 ### ⚠️ El puerto es exclusivo
 
 Mientras el agente corre con `TurnstileEnabled`, mantiene **COM3 abierto de forma
