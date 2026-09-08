@@ -194,27 +194,19 @@ guarda **cifrado con DPAPI (LocalMachine)** en `pairing.dat`. Tiene prioridad so
 
 ## Torniquete
 
-Hardware verificado el **2026-09-08**: módulo **LCUS-1** — relé Songle `SRD-05VDC-SL-C`
-montado sobre una placa con **CH340 y USB-A integrado**. Se enchufa directo a la PC, sin
-Arduino y sin firmware; Windows 11 lo enumeró como `USB-SERIAL CH340 (COM3)` con el driver
-que ya traía. Los bytes que manda `UsbRelay.cs` (`A0 01 01 A2` / `A0 01 00 A1` a 9600) son
-los que espera esta placa: tres pulsos de 700 ms confirmados audiblemente.
+El agente pulsa un relé USB (contacto seco) contra la entrada de apertura del torniquete.
+Verificado end-to-end el **2026-09-08** con hardware real: relé **LCUS-1** en COM3 y
+torniquete **ZKTeco TS1000**.
 
-```json
-"Agent": {
-  "TurnstileEnabled": true,
-  "RelayPort": "COM3",
-  "RelayPulseMs": 700
-}
-```
+| Caso | Resultado |
+|---|---|
+| 3 socios vigentes, huellas consecutivas | 3 asistencias, **3 pulsos**, 1.5–2 s de latencia |
+| 1 socio con membresía vencida | huella identificada, `accesos_denegados.motivo = expired`, **relé mudo** |
 
-`launch.ps1` solo reemplaza el `.exe` y el `version.txt` al auto-actualizar, así que esta
-config sobrevive a las actualizaciones.
-
-**Cableado:** `COM` + `NO` a la entrada de apertura/release del torniquete. **NO, nunca
-NC**: con normalmente-abierto un corte de luz deja el torniquete cerrado; con NC quedaría
-abierto de par en par. Para identificar las borneras, multímetro en continuidad con el relé
-en reposo — `COM–NC` da continuidad, `COM–NO` no.
+El caso negativo es el que valida el diseño: la huella **sí matcheó** —el lector identificó
+a la persona— y lo que frenó fue el gate de membresía. El freno está en la capa correcta, no
+en el relé. La latencia viene casi entera del ciclo de `identify` (ventana de 4 s + 250 ms
+de pausa), no del pulso; la elimina el scanner continuo de v1.0.3.
 
 ### Quién decide abrir
 
@@ -227,25 +219,15 @@ Nunca abre con membresía vencida ni con el cupo de clases agotado.
 El cliente se auto-desactiva tras el primer `409`, así los gimnasios sin torniquete no
 pagan un request por cada entrada.
 
-**Probado en las dos direcciones el 2026-09-08**, con lector y relé reales:
+### ⚠️ El puerto COM es exclusivo
 
-| Caso | Resultado |
-|---|---|
-| 3 socios vigentes, huellas consecutivas | 3 asistencias, **3 pulsos**, 1.5–2 s de latencia |
-| 1 socio con membresía vencida | huella identificada, `accesos_denegados.motivo = expired`, **relé mudo** |
+Mientras el agente corre con `TurnstileEnabled`, mantiene el COM abierto y no lo suelta
+(`UsbRelay` abre el `SerialPort` en el constructor). El botón «Conectar puerta» del kiosko
+—que usa Web Serial contra el mismo tipo de placa— **no puede tomar ese puerto al mismo
+tiempo**. Son caminos alternativos, no complementarios.
 
-El caso negativo es el que importa: la huella **sí matcheó** —el lector identificó a la
-persona— y lo que frenó fue el gate de membresía. El freno está en la capa correcta, no en
-el relé. La latencia de 1.5–2 s viene casi entera del ciclo de `identify` (ventana de 4 s +
-250 ms de pausa), no del pulso; la elimina el scanner continuo de v1.0.3.
-
-### ⚠️ El puerto es exclusivo
-
-Mientras el agente corre con `TurnstileEnabled`, mantiene **COM3 abierto de forma
-exclusiva** (`UsbRelay` abre el `SerialPort` en el constructor y no lo suelta). El botón
-«Conectar puerta» del kiosko —que usa Web Serial contra el mismo tipo de placa— **no puede
-tomar ese puerto al mismo tiempo**. Son dos caminos alternativos, no complementarios: o el
-kiosko habla directo por Web Serial, o el agente maneja el relé para toda la app.
+> **Instalación completa** —cableado, DIP switches, botones de recepción y salida,
+> verificación y comportamiento en emergencia— en **[TORNIQUETE.md](TORNIQUETE.md)**.
 
 ---
 
