@@ -140,6 +140,7 @@ desde este repo, pero explica la mayoría de los `identify` que aparecen en `/lo
 | **Listener global** | `GymLayout` → **toda** página admin autenticada | `identify` | cada 250 ms |
 | **Modal de enrolamiento** | ficha del cliente | `capture` ×3 | a demanda |
 | **Kiosko de puerta** | `/kiosko` (excluido del listener global) | `identify` | su propio loop |
+| **Registro de asistencia** | `useRegistrarAsistencia` (huella, QR, DNI, manual) | `turnstile/open` | 1 por acceso concedido |
 
 El listener global corre en toda página admin a propósito: la idea es que un socio apoye el
 dedo y se registre su entrada esté donde esté la recepcionista, aunque esté cobrando en el
@@ -188,6 +189,51 @@ service-role. Al arrancar vinculado baja los templates del tenant y llena el cac
 El pairing entra por `POST /api/pair` desde la propia app, se valida contra `kiosk_init` y se
 guarda **cifrado con DPAPI (LocalMachine)** en `pairing.dat`. Tiene prioridad sobre
 `appsettings` y surte efecto **sin reiniciar** el agente.
+
+---
+
+## Torniquete
+
+Hardware verificado el **2026-09-08**: módulo **LCUS-1** — relé Songle `SRD-05VDC-SL-C`
+montado sobre una placa con **CH340 y USB-A integrado**. Se enchufa directo a la PC, sin
+Arduino y sin firmware; Windows 11 lo enumeró como `USB-SERIAL CH340 (COM3)` con el driver
+que ya traía. Los bytes que manda `UsbRelay.cs` (`A0 01 01 A2` / `A0 01 00 A1` a 9600) son
+los que espera esta placa: tres pulsos de 700 ms confirmados audiblemente.
+
+```json
+"Agent": {
+  "TurnstileEnabled": true,
+  "RelayPort": "COM3",
+  "RelayPulseMs": 700
+}
+```
+
+`launch.ps1` solo reemplaza el `.exe` y el `version.txt` al auto-actualizar, así que esta
+config sobrevive a las actualizaciones.
+
+**Cableado:** `COM` + `NO` a la entrada de apertura/release del torniquete. **NO, nunca
+NC**: con normalmente-abierto un corte de luz deja el torniquete cerrado; con NC quedaría
+abierto de par en par. Para identificar las borneras, multímetro en continuidad con el relé
+en reposo — `COM–NC` da continuidad, `COM–NO` no.
+
+### Quién decide abrir
+
+El endpoint **no valida nada**: recibe `tenant_id` y lo ignora. Toda la responsabilidad es
+de quien llama. Hoy lo llama `useRegistrarAsistencia.registrarCliente`, cuyo `ok` es el
+veredicto del gate de membresía, así que abre exactamente cuando el acceso fue concedido —
+incluido «ya registró hoy», porque el torniquete controla el **paso**, no la asistencia.
+Nunca abre con membresía vencida ni con el cupo de clases agotado.
+
+El cliente se auto-desactiva tras el primer `409`, así los gimnasios sin torniquete no
+pagan un request por cada entrada.
+
+### ⚠️ El puerto es exclusivo
+
+Mientras el agente corre con `TurnstileEnabled`, mantiene **COM3 abierto de forma
+exclusiva** (`UsbRelay` abre el `SerialPort` en el constructor y no lo suelta). El botón
+«Conectar puerta» del kiosko —que usa Web Serial contra el mismo tipo de placa— **no puede
+tomar ese puerto al mismo tiempo**. Son dos caminos alternativos, no complementarios: o el
+kiosko habla directo por Web Serial, o el agente maneja el relé para toda la app.
 
 ---
 
