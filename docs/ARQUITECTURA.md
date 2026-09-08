@@ -130,6 +130,43 @@ contra `kiosk_marcar_asistencia` — el agente nunca toca eso.
 
 ---
 
+## Quién le habla al agente (y por qué compiten)
+
+El agente tiene **un solo sensor** y **tres** consumidores en el navegador. Esto no se ve
+desde este repo, pero explica la mayoría de los `identify` que aparecen en `/logs`:
+
+| Consumidor | Dónde vive | Qué pide | Cadencia |
+|---|---|---|---|
+| **Listener global** | `GymLayout` → **toda** página admin autenticada | `identify` | cada 250 ms |
+| **Modal de enrolamiento** | ficha del cliente | `capture` ×3 | a demanda |
+| **Kiosko de puerta** | `/kiosko` (excluido del listener global) | `identify` | su propio loop |
+
+El listener global corre en toda página admin a propósito: la idea es que un socio apoye el
+dedo y se registre su entrada esté donde esté la recepcionista, aunque esté cobrando en el
+POS. La consecuencia es que **enrolar y identificar compiten por el mismo dedo**: el loop de
+250 ms gana por frecuencia, se lleva la captura del enrolado y responde 404.
+
+El frontend ya lo coordina con un semáforo (`src/lib/sensorHuella.ts`): el modal reserva el
+sensor mientras captura y el listener se apaga. Queda contención residual de hasta
+`IdentifyTimeoutSeconds` (~4 s) porque el `identify` **ya en vuelo** no se puede cancelar
+desde el cliente — eso lo cierra el scanner continuo (v1.0.3).
+
+### Lo que el agente podría aportar: un `boot_id` en `/health`
+
+El listener descarta el primer `match` tras cada (re)inicio, porque el agente devuelve en su
+primer `identify` la huella que tenía bufferada y eso generaba asistencias fantasma. Hoy el
+navegador aproxima "el agente se reinició" mirando si `/health` dejó de responder, lo cual
+falla si el reinicio dura menos que su ventana de detección.
+
+Con un identificador de arranque en el payload de `/health` —un GUID generado al iniciar el
+proceso— el navegador sabría con certeza cuándo re-armar esa guarda. Es un campo y una línea
+en `Program.cs`.
+
+> Diagnóstico completo del lado del frontend:
+> `administracion_gimnasio-obs/docs/FIX_huella_lector_intermitente_2026-09-07.md`
+
+---
+
 ## Dónde viven las huellas
 
 ### Local · siempre
