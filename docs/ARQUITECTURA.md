@@ -128,6 +128,41 @@ igual: la app decía «éxito» y la tabla en la nube quedaba vacía (arreglado 
 El kiosko lo llama en loop. Con el match en mano, la asistencia la marca el propio kiosko
 contra `kiosk_marcar_asistencia` — el agente nunca toca eso.
 
+### `cliente_id` no siempre es un cliente
+
+Desde el 2026-09-08 el mismo canal transporta también las huellas del **staff**: entrenadores
+y administradores que necesitan que el torniquete les abra aunque no sean socios.
+
+**El agente no se enteró, y esa fue la idea.** Su `ClienteId` es un `string` — no parsea uuid,
+no consulta ninguna tabla, no valida nada:
+
+```csharp
+var uid = await store.SaveAsync(body.TenantId, body.ClienteId, merged);
+...
+return Results.Json(new { ok = true, cliente_id = entry.ClienteId, score = match.Score });
+```
+
+Recibe un identificador en el enroll y devuelve ese mismo identificador en el identify. Quién
+es esa persona lo resuelve **la RPC** `huella_enroll` al guardar (mira si el uuid es de
+`clientes` o de `empleados`) y **el frontend** al matchear.
+
+Se hizo así por una razón muy concreta: compilar el agente necesita el SDK de .NET, que no
+está instalado en ninguna de las dos PCs del gym. Meter el soporte de staff en el agente
+habría trabado la feature entera detrás de esa instalación. Al resolverlo en el borde, el
+`.exe` que corre hoy en recepción sigue siendo válido sin tocarlo.
+
+**Consecuencia para quien lea el contrato:** el campo se llama `cliente_id` en el JSON y
+`p_cliente_id` en la RPC, pero **puede ser el uuid de un empleado**. Los nombres se
+conservan porque son el contrato de cable con el `.exe` ya desplegado; renombrarlos rompería
+todas las instalaciones existentes.
+
+**El uid es uno solo por tenant**, y ahora tiene un unique `(tenant_id, uid)` que lo defiende.
+La base en memoria del SDK es un único espacio de uids: dos secuencias independientes —una
+para socios, otra para staff— habrían colisionado, y un empleado con el mismo uid que un socio
+haría que `identify` devuelva **a la persona equivocada**.
+
+---
+
 ---
 
 ## Quién le habla al agente (y por qué compiten)
