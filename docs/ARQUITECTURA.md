@@ -217,6 +217,23 @@ en `Program.cs`.
 
 ### Durable · al vincular
 
+> **El vinculo gobierna las ESCRITURAS, no las lecturas.** Es lo que mas confunde de este
+> diseno, y no se ve desde la UI.
+>
+> - **Enrolar** usa el kiosk_token del pairing → solo funciona para el gym vinculado. Enrolar
+>   a alguien de otro tenant devuelve 409 con el mensaje "el lector esta vinculado a otro gym",
+>   que es literalmente cierto pero se lee como un bug.
+> - **Identificar** usa el `tenant_id` que manda el NAVEGADOR y lee del cache local, que esta
+>   indexado por tenant: `db.TryGetValue(tenantId, out var list)`. No consulta el pairing.
+>
+> Y `/api/pair` **no borra nada**: solo hace `store.SaveAsync` de los templates del tenant
+> nuevo, bajo otra clave del mismo JSON. Re-vincular a otro gym deja intactos los templates
+> del anterior, y se siguen reconociendo si el navegador vuelve a pararse en ese tenant.
+>
+> Consecuencia practica: una misma PC puede reconocer huellas de varios gyms a la vez, pero
+> solo puede ENROLAR para uno. Y el torniquete no distingue — `abrirTorniquete` manda el
+> tenant_id y el agente lo ignora, asi que la puerta abre para cualquier match.
+
 RPCs `SECURITY DEFINER` en Supabase (`huella_enroll`, `huella_templates`, `kiosk_init`),
 llamadas con la **anon key pública + el kiosk_token** del gym. El agente **nunca** usa la
 service-role. Al arrancar vinculado baja los templates del tenant y llena el cache local.
