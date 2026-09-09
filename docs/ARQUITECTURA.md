@@ -233,6 +233,14 @@ en `Program.cs`.
 > Consecuencia practica: una misma PC puede reconocer huellas de varios gyms a la vez, pero
 > solo puede ENROLAR para uno. Y el torniquete no distingue — `abrirTorniquete` manda el
 > tenant_id y el agente lo ignora, asi que la puerta abre para cualquier match.
+>
+> **⚠️ Y `/health` no dice a CUAL esta vinculado.** Devuelve `durable = rpc.Enabled`, un
+> booleano de "hay algun pairing". La tarjeta de Configuracion leia eso y mostraba "Lector
+> vinculado a este gym" en TODOS los tenants, ademas de esconder el boton de vincular — con
+> el lector apuntando a otro gym, el enroll moria con 409 y no habia forma de arreglarlo desde
+> la UI. Parcheado del lado del frontend en `11f04c7` (no afirma lo que no sabe y el boton
+> esta siempre), pero **el arreglo de fondo es agregar `tenant_id` y `gym` al `/health`** para
+> que la app pueda comparar y avisar sola. Pendiente: necesita recompilar el agente.
 
 RPCs `SECURITY DEFINER` en Supabase (`huella_enroll`, `huella_templates`, `kiosk_init`),
 llamadas con la **anon key pública + el kiosk_token** del gym. El agente **nunca** usa la
