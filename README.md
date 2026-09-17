@@ -75,7 +75,31 @@ Crea una tarea programada `FitGymHuellaAgent` con trigger **onlogon** que corre 
 la **sesión interactiva del usuario** (oculto, vía `run-hidden.vbs`). Ahí el lector USB **sí**
 se ve. Quita el servicio viejo y limpia `%ProgramData%\HuellaAgent` (lo recrea como usuario).
 
+### ✅ Vigilante (cada 1 minuto) — `instalar-vigilante.bat`
+```
+scripts/windows/instalar-vigilante.bat   (doble clic, con la sesión de recepción)
+scripts/windows/vigilante.ps1            (la lógica)
+scripts/windows/vigilante-oculto.vbs     (lo lanza sin ventana; lo usa la tarea)
+```
+La v1.0.2 abre el lector **una sola vez** al arrancar y no reintenta. En campo (08 y
+10-sep) arrancó con `zkfp2.Init fallo` al iniciar sesión y quedó con el lector simulado todo
+el día, con `/health` diciendo `reader: connected`. La tarea `FitGymHuellaVigilante`:
+- arranca el agente si está caído (o lo reinicia si no responde hace más de 90 s);
+- lo reinicia si `/health` dice `MockDevice` **y** Windows ve un lector ZKTeco (`VID_1B55`);
+- no reinicia más de una vez cada 3 minutos, y no toca nada si `launch.ps1` está actualizando.
+
+A diferencia de `instalar.bat`, **no borra** `%ProgramData%\HuellaAgent` (vínculo y huellas).
+Deja rastro en `%ProgramData%\HuellaAgent\logs\vigilante.log`. Probado el 17-sep contra un
+SLK20R real: agente caído → arrancado; sano → nada; simulado → reiniciado con lector real.
+
 ### ❌ Servicio de Windows — `instalar-servicio.bat` (NO sirve con el SLK20R)
+
+> **En duda desde el 16-sep.** El SDK accede al lector por libusb0 y no usa nada de la
+> sesión, y el lector es **exclusivo entre procesos**: con otro proceso teniéndolo abierto
+> (el demo del SDK, otra instancia), `OpenDevice` devuelve 0 y el agente cae al Mock igual.
+> La prueba de junio fue antes del log a archivo, así que la causa real nunca quedó
+> registrada. Repetirla con todo lo demás cerrado antes de descartar el servicio. Detalle en
+> el vault: `docs/INVESTIGACION_agente_huella_portero_2026-09-16.md`.
 `Program.cs` soporta `UseWindowsService()`, pero como **LocalSystem (Session 0)** el SDK
 ZKFinger **no accede al USB** → `ZkfpDevice` falla y cae a `MockDevice` (el `/health` dice
 `device: "MockDevice (SLK20R simulado)"` aunque `reader: connected`). Confirmado en campo: a

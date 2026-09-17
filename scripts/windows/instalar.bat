@@ -43,6 +43,11 @@ schtasks /create /tn "FitGymHuellaAgent" /tr "wscript.exe \"%VBS%\"" /sc onlogon
 if %errorLevel% neq 0 ( echo  ERROR creando la tarea de autostart. & pause & exit /b 1 )
 start "" wscript.exe "%VBS%"
 
+REM Vigilante: arranca el agente si se cae y lo reinicia si quedo con el lector simulado.
+if exist "%~dp0vigilante-oculto.vbs" (
+  schtasks /create /tn "FitGymHuellaVigilante" /tr "wscript.exe \"%~dp0vigilante-oculto.vbs\"" /sc minute /mo 1 /f
+)
+
 echo.
 echo  LISTO. El agente quedo corriendo y arranca solo al iniciar sesion.
 echo.
