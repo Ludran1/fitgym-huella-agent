@@ -26,6 +26,7 @@ namespace HuellaAgent.Devices;
 public sealed class PorteroService : BackgroundService
 {
     private readonly FingerprintScanner _scanner;
+    private readonly Bocina _bocina;
     private readonly IFingerprintDevice _device;
     private readonly ITemplateStore _store;
     private readonly HuellaRpc _rpc;
@@ -39,9 +40,10 @@ public sealed class PorteroService : BackgroundService
     private DateTime _ultimaVez = DateTime.MinValue;
 
     public PorteroService(FingerprintScanner scanner, IFingerprintDevice device, ITemplateStore store,
-                          HuellaRpc rpc, IRelay relay, AgentConfig cfg, ILogger<PorteroService> log)
+                          HuellaRpc rpc, IRelay relay, Bocina bocina, AgentConfig cfg, ILogger<PorteroService> log)
     {
         _scanner = scanner;
+        _bocina = bocina;
         _device = device;
         _store = store;
         _rpc = rpc;
@@ -86,6 +88,7 @@ public sealed class PorteroService : BackgroundService
                 if (match is null)
                 {
                     _log.LogInformation("Portero: dedo sin coincidencia ({Cuantas} huellas cargadas)", db.Count);
+                    _bocina.Rechazo();   // nadie mas le va a avisar que no lo reconocio
                     continue;
                 }
 
@@ -108,11 +111,13 @@ public sealed class PorteroService : BackgroundService
                 {
                     _log.LogInformation("Portero: {Nombre} NO pasa ({Motivo}) score={Score}",
                         veredicto.Nombre ?? "(desconocido)", veredicto.Motivo, match.Score);
+                    _bocina.Rechazo();
                     continue;
                 }
 
                 _log.LogInformation("Portero: pasa {Nombre} ({Tipo}{YaHoy}) score={Score}",
                     veredicto.Nombre, veredicto.Tipo, veredicto.YaHoy ? ", ya habia entrado hoy" : "", match.Score);
+                _bocina.Ok();
 
                 if (!_cfg.TurnstileEnabled) continue;   // gym sin torniquete: solo se registra
                 try

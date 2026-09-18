@@ -49,6 +49,7 @@ if exist "%~dp0vigilante-oculto.vbs" (
 )
 
 echo.
+echo  Ahora ejecuta tambien:  ajustes-energia.bat  (clic derecho, como administrador)
 echo  LISTO. El agente quedo corriendo y arranca solo al iniciar sesion.
 echo.
 echo  1. Verifica:  http://localhost:8000/health   (debe decir  device: ZKTeco SLK20R)

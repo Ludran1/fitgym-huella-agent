@@ -78,6 +78,13 @@ public sealed class AgentConfig
     /// <summary>Anti-rebote del portero: el mismo dedo apoyado no vuelve a pedir veredicto.</summary>
     public int AutoDecideDedupSeconds { get; init; } = 6;
 
+    /// <summary>
+    /// Aviso sonoro por los parlantes de la PC: un pitido corto al pasar, dos graves al
+    /// rechazar. En la puerta no hay pantalla, y el caso que de verdad necesita aviso es
+    /// el que NO abre. Se apaga con false si molesta.
+    /// </summary>
+    public bool SonidoEnabled { get; init; } = true;
+
     // -- Reconexion del lector (v1.1) ---------------------------------------------
 
     /// <summary>Cada cuantos segundos se reintenta abrir el lector cuando esta cerrado.</summary>

@@ -67,7 +67,9 @@ builder.Services.AddSingleton<IFingerprintDevice>(sp =>
 builder.Services.AddSingleton<FingerprintScanner>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<FingerprintScanner>());
 // El portero (Agent:AutoDecide): el agente decide y abre sin navegador. Se apaga solo si
-// el flag está en false, que es el default hasta que cada gym lo estrene.
+// el flag está en false, que es el default hasta que cada gym lo estrene. La bocina es su
+// aviso sonoro: en la puerta no hay pantalla y el lector no tiene luz ni zumbador propios.
+builder.Services.AddSingleton<Bocina>();
 builder.Services.AddHostedService<PorteroService>();
 builder.Services.AddSingleton<IRelay>(sp =>
     RelayFactory.Create(sp.GetRequiredService<AgentConfig>(), sp.GetRequiredService<ILoggerFactory>()));
