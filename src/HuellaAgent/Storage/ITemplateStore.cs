@@ -15,4 +15,10 @@ public interface ITemplateStore
 
     /// <summary>Total de templates cargados (todos los tenants) para /health.</summary>
     Task<int> CountAsync();
+
+    /// <summary>
+    /// Contador que sube en cada SaveAsync. El device lo usa (junto al tenant) como clave
+    /// de cache de su DB en memoria del SDK: mientras no cambie, no hace falta rearmarla.
+    /// </summary>
+    long Version { get; }
 }

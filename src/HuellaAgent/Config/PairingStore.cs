@@ -5,7 +5,11 @@ using System.Text.Json;
 namespace HuellaAgent.Config;
 
 /// <summary>Credenciales durables que el agente obtiene por pairing (1 clic desde la app).</summary>
-public sealed record Pairing(string Token, string SupabaseUrl, string AnonKey, string? TenantId);
+/// <summary>
+/// `Gym` se agrego en v1.1 y es opcional a proposito: un pairing.dat viejo (sin ese campo)
+/// se sigue leyendo igual, queda con Gym=null y se completa solo al revincular.
+/// </summary>
+public sealed record Pairing(string Token, string SupabaseUrl, string AnonKey, string? TenantId, string? Gym = null);
 
 /// <summary>
 /// Persiste el pairing en disco, CIFRADO con DPAPI (LocalMachine) en Windows — así el token

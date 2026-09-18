@@ -23,19 +23,50 @@ public static class FingerprintEndpoints
     private static readonly string Version =
         System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
 
+    /// <summary>
+    /// Identificador de ESTE arranque. El navegador descarta el primer match despues de que
+    /// el agente se reinicia (dedo bufferado = asistencia fantasma), y hasta ahora lo
+    /// aproximaba mirando si /health dejaba de responder: si el reinicio duraba menos que su
+    /// ventana de deteccion, no se enteraba. Con esto lo sabe con certeza.
+    /// </summary>
+    private static readonly string BootId = Guid.NewGuid().ToString("N")[..12];
+
     public static void Map(WebApplication app)
     {
         // ── GET /health (sin api-key: el chip de estado lo pollea siempre) ──────────
-        app.MapGet("/health", async (IFingerprintDevice device, ITemplateStore store, HuellaRpc rpc) =>
-            TypedResults.Json(new
+        //
+        // Tiene que poder responder, sin entrar a la PC, las preguntas que antes obligaban
+        // a ir hasta el gym: ¿hay lector de verdad o simulado? ¿cual? ¿a que gym esta
+        // vinculado? ¿leyo algo alguna vez? ¿que fue lo ultimo que fallo? ¿se reinicio?
+        app.MapGet("/health", async (IFingerprintDevice device, ITemplateStore store, HuellaRpc rpc,
+                                     FingerprintScanner scanner, PairingStore pairing, IRelay relay, AgentConfig cfg) =>
+        {
+            var vinculo = pairing.Load();
+            return TypedResults.Json(new
             {
                 ok = true,
                 reader = device.IsConnected ? "connected" : "disconnected",
                 device = device.DeviceName,
                 templates_loaded = await store.CountAsync(),
                 durable = rpc.Enabled,   // true = vinculado a Supabase (pairing o appsettings)
+                // A QUE gym esta vinculado. Sin esto, la tarjeta de Configuracion mostraba
+                // "vinculado" en todos los tenants y el enroll moria con 409 sin explicacion.
+                tenant_id = vinculo?.TenantId,
+                gym = vinculo?.Gym,
+                // Modo de lectura: "continuous" = el sensor lee siempre (v1.0.3, sin zona
+                // muerta entre polls); "per_request" = camino viejo. Sirve para verificar
+                // on-site, desde el navegador, que el fix esta activo en esa PC.
+                scan = scanner.Enabled ? "continuous" : "per_request",
+                // Cambia en cada arranque: le dice al navegador que el agente se reinicio,
+                // sin tener que adivinarlo por un /health que dejo de responder.
+                boot_id = BootId,
+                connected_since = device.ConnectedSinceUtc,
+                last_read_at = scanner.UltimaLecturaUtc,
+                last_error = device.LastError,
+                turnstile = !cfg.TurnstileEnabled ? "off" : relay.IsConnected ? "ready" : "error",
                 version = Version,
-            }));
+            });
+        });
 
         // ── GET /logs?lines=N (sin api-key: visor de errores en el navegador) ───────
         // El agente corre oculto → esto deja ver los ultimos logs sin buscar el archivo.
@@ -59,10 +90,15 @@ public static class FingerprintEndpoints
         var api = app.MapGroup("/api/fingerprint").AddEndpointFilter(ApiKeyFilter);
 
         // POST capture {timeout} → {template, quality} · 408 sin dedo
-        api.MapPost("/capture", async (CaptureReq? body, IFingerprintDevice device, AgentConfig cfg, CancellationToken ct) =>
+        api.MapPost("/capture", async (CaptureReq? body, IFingerprintDevice device, FingerprintScanner scanner, AgentConfig cfg, CancellationToken ct) =>
         {
             try
             {
+                // Pausa el scanner continuo mientras dura el enrolado: si no, los dos
+                // compiten por el mismo dedo (el loop se lo roba y /capture se cuelga
+                // hasta el timeout) y ademas un dedo del enrolado terminaria marcando
+                // asistencia por /identify.
+                using var lectorTomado = await scanner.SuspendAsync(ct);
                 var r = await device.CaptureAsync(body?.Timeout ?? 15, ct);
                 return Results.Json(new { template = r.Template, quality = r.Quality });
             }
@@ -101,7 +137,13 @@ public static class FingerprintEndpoints
         });
 
         // POST identify {tenant_id} → 200 {ok, cliente_id, score} · 404 sin match · 408 sin dedo
-        api.MapPost("/identify", async (IdentifyReq body, IFingerprintDevice device, ITemplateStore store, AgentConfig cfg, CancellationToken ct) =>
+        //
+        // v1.0.3: ya NO arma el sensor por request. El FingerprintScanner lo mantiene
+        // leyendo siempre; aca solo se espera (long-poll) a que aparezca un dedo en su
+        // buffer y se hace el 1:N. Un dedo apoyado mientras el frontend dormia entre polls
+        // ya esta bufferado y vuelve al instante: se acabo la zona muerta de ~25% que
+        // causaba el "a veces agarra, a veces no".
+        api.MapPost("/identify", async (IdentifyReq body, IFingerprintDevice device, FingerprintScanner scanner, ITemplateStore store, AgentConfig cfg, CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(body.TenantId))
                 return Results.StatusCode(400);
@@ -109,24 +151,49 @@ public static class FingerprintEndpoints
             var db = await store.LoadAsync(body.TenantId);
             try
             {
-                var match = await device.IdentifyAsync(db, cfg.IdentifyTimeoutSeconds, ct);
-                if (match is null) return Results.StatusCode(404);              // dedo sin match
-                var entry = db.FirstOrDefault(t => t.Uid == match.Uid);
-                if (entry is null) return Results.StatusCode(404);
-                return Results.Json(new { ok = true, cliente_id = entry.ClienteId, score = match.Score });
+                if (!scanner.Enabled)
+                {
+                    // Camino legacy (Agent:ContinuousScan=false): valvula de escape si el
+                    // scanner se porta mal contra hardware real, sin necesidad de rollback.
+                    var legacy = await device.IdentifyAsync(db, cfg.IdentifyTimeoutSeconds, ct);
+                    return Match(legacy, db);
+                }
+
+                var probe = await scanner.WaitForProbeAsync(cfg.IdentifyTimeoutSeconds, ct);
+                if (probe is null) return Results.StatusCode(408);            // sin dedo
+
+                // La clave incluye el tenant Y la version del store: la DB en memoria del
+                // SDK se reusa entre polls y se rearma sola al enrolar o cambiar de tenant.
+                var match = device.Identify(probe.Template, db, $"{body.TenantId}:{store.Version}");
+                return Match(match, db);
             }
             catch (NoFingerException) { return Results.StatusCode(408); }       // sin dedo
             catch (DeviceUnavailableException) { return Results.StatusCode(503); }
+            catch (OperationCanceledException) { return Results.StatusCode(408); } // el cliente corto
         });
+
 
         // ── POST /api/turnstile/open {tenant_id} (Fase 7, opcional) ─────────────────
         // NO es parte del contrato del frontend. El Kiosko lo llamaria DESPUES de que
         // kiosk_marcar_asistencia confirme una membresia valida (no abrir a morosos).
-        app.MapPost("/api/turnstile/open", async (TurnstileReq body, IRelay relay, AgentConfig cfg, CancellationToken ct) =>
+        app.MapPost("/api/turnstile/open", async (TurnstileReq body, IRelay relay, AgentConfig cfg,
+                                                  ILoggerFactory lf, CancellationToken ct) =>
         {
             if (!cfg.TurnstileEnabled) return Results.Json(new { ok = false, detail = "torniquete deshabilitado" }, statusCode: 409);
-            await relay.PulseAsync(cfg.RelayPulseMs, ct);
-            return Results.Json(new { ok = true });
+            try
+            {
+                await relay.PulseAsync(cfg.RelayPulseMs, ct);
+                return Results.Json(new { ok = true });
+            }
+            catch (Exception ex)
+            {
+                // El rele desenchufado o el COM ocupado tiraban una excepcion sin manejar:
+                // 500 sin explicacion, y el frontend (que solo se apaga ante un 409) seguia
+                // insistiendo en cada entrada. Ahora es un 503 con el motivo, igual que el
+                // lector, y queda en el log.
+                lf.CreateLogger("Turnstile").LogError(ex, "No se pudo pulsar el rele ({Port})", cfg.RelayPort);
+                return Results.Json(new { ok = false, detail = $"el rele no respondio: {ex.Message}" }, statusCode: 503);
+            }
         }).AddEndpointFilter(ApiKeyFilter);
 
         // ── POST /api/pair {token, supabase_url, anon_key} (pairing 1-clic desde la app) ──
@@ -143,7 +210,8 @@ public static class FingerprintEndpoints
             if (!ok || string.IsNullOrEmpty(tenantId))
                 return Results.Json(new { ok = false, detail = "token invalido o gym suspendido" }, statusCode: 401);
 
-            pairing.Save(new Pairing(body.Token, body.SupabaseUrl, body.AnonKey, tenantId));
+            // El nombre del gym se guarda para que /health pueda decir a CUAL esta vinculado.
+            pairing.Save(new Pairing(body.Token, body.SupabaseUrl, body.AnonKey, tenantId, gym));
 
             // Carga inicial de templates del tenant al cache local.
             var res = await rpc.TemplatesAsync(ct);
@@ -152,6 +220,15 @@ public static class FingerprintEndpoints
 
             return Results.Json(new { ok = true, tenant_id = tenantId, gym, templates = res?.Templates.Count ?? 0 });
         }).AddEndpointFilter(ApiKeyFilter);
+    }
+
+    /// <summary>Traduce el match del SDK al contrato HTTP: 200 con cliente_id, o 404.</summary>
+    private static IResult Match(IdentifyMatch? match, IReadOnlyList<StoredTemplate> db)
+    {
+        if (match is null) return Results.StatusCode(404);               // dedo sin match
+        var entry = db.FirstOrDefault(t => t.Uid == match.Uid);
+        if (entry is null) return Results.StatusCode(404);               // uid huerfano
+        return Results.Json(new { ok = true, cliente_id = entry.ClienteId, score = match.Score });
     }
 
     /// <summary>Lee todas las lineas de un archivo que otro proceso (Serilog) tiene abierto.</summary>

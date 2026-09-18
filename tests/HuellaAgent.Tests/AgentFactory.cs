@@ -11,16 +11,24 @@ namespace HuellaAgent.Tests;
 /// <summary>
 /// WebApplicationFactory con storage en un archivo temporal unico (aislamiento por test)
 /// y el FakeDevice inyectado. Permite testear el contrato HTTP completo sin SDK ni hardware.
+///
+/// Por defecto el scanner continuo va APAGADO: su loop corre en tiempo real y publicaria
+/// dedos de fondo, volviendo flaky a los tests de contrato (un test que setea
+/// IdentifyNoFinger DESPUES de arrancar competiria contra un dedo ya bufferado). Los tests
+/// del scanner lo prenden explicitamente (continuousScan: true) o lo prueban directo,
+/// sin HTTP, en ScannerTests.
 /// </summary>
 public sealed class AgentFactory : WebApplicationFactory<Program>
 {
     public FakeDevice Device { get; } = new();
     private readonly string _storagePath;
     private readonly string? _apiKey;
+    private readonly bool _continuousScan;
 
-    public AgentFactory(string? apiKey = null)
+    public AgentFactory(string? apiKey = null, bool continuousScan = false)
     {
         _apiKey = apiKey;
+        _continuousScan = continuousScan;
         _storagePath = Path.Combine(Path.GetTempPath(), $"huella-test-{Guid.NewGuid():N}.json");
     }
 
@@ -32,6 +40,7 @@ public sealed class AgentFactory : WebApplicationFactory<Program>
             {
                 ["Agent:StoragePath"] = _storagePath,
                 ["Agent:IdentifyTimeoutSeconds"] = "1",
+                ["Agent:ContinuousScan"] = _continuousScan ? "true" : "false",
             };
             if (_apiKey is not null) overrides["Agent:ApiKey"] = _apiKey;
             cfg.AddInMemoryCollection(overrides);

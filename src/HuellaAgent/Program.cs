@@ -60,6 +60,12 @@ builder.Services.AddSingleton(sp => new PairingStore(
     Path.Combine(Path.GetDirectoryName(sp.GetRequiredService<AgentConfig>().StoragePath) ?? ".", "pairing.dat")));
 builder.Services.AddSingleton<IFingerprintDevice>(sp =>
     DeviceFactory.Create(sp.GetRequiredService<AgentConfig>(), sp.GetRequiredService<ILogger<Program>>()));
+// Scanner continuo: mantiene el sensor leyendo siempre y bufferea el ultimo dedo, para
+// que /identify no tenga que armar el lector por request (esa era la zona muerta del
+// ~25% que hacia que "a veces agarre y a veces no"). Singleton + hosted service: la
+// MISMA instancia que inyectan los endpoints es la que corre el loop.
+builder.Services.AddSingleton<FingerprintScanner>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<FingerprintScanner>());
 builder.Services.AddSingleton<IRelay>(sp =>
     RelayFactory.Create(sp.GetRequiredService<AgentConfig>(), sp.GetRequiredService<ILoggerFactory>()));
 builder.Services.AddSingleton<HuellaRpc>();

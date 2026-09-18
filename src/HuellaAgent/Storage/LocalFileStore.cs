@@ -20,6 +20,12 @@ public sealed class LocalFileStore : ITemplateStore
     // refresca al escribir (enroll). _cache null = aun no cargado de disco.
     private Dictionary<string, List<StoredTemplate>>? _cache;
 
+    // Sube en cada SaveAsync (enroll / carga inicial de templates). El device lo combina
+    // con el tenant para saber si su DB en memoria del SDK sigue vigente.
+    private long _version;
+
+    public long Version => Interlocked.Read(ref _version);
+
     public LocalFileStore(string path) => _path = path;
 
     public async Task<IReadOnlyList<StoredTemplate>> LoadAsync(string tenantId)
@@ -64,6 +70,7 @@ public sealed class LocalFileStore : ITemplateStore
             }
 
             await WriteAllAsync(db);
+            Interlocked.Increment(ref _version);   // invalida la DB cacheada del SDK
             return uid;
         }
         finally { _lock.Release(); }

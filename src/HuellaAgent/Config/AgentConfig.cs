@@ -19,6 +19,44 @@ public sealed class AgentConfig
     /// <summary>Umbral de DBIdentify del SDK. R1: calibrar con hardware real (FAR/FRR).</summary>
     public int IdentifyThreshold { get; init; } = 0;
 
+    // -- Scanner continuo (v1.0.3) ------------------------------------------------
+    // El sensor se mantiene leyendo SIEMPRE en un loop de fondo en vez de armarse por
+    // request. Ver FingerprintScanner: elimina la zona muerta entre polls de /identify.
+
+    /// <summary>Kill switch. false = vuelve al camino viejo (capturar por request).</summary>
+    public bool ContinuousScan { get; init; } = true;
+
+    /// <summary>Cada cuanto el loop pregunta si hay dedo. 200ms perdia toques cortos.</summary>
+    public int ScanPollMs { get; init; } = 40;
+
+    /// <summary>Cuanto vale un dedo bufferado. Mas viejo que esto no marca (dedo rancio).</summary>
+    public int ProbeFreshnessMs { get; init; } = 2500;
+
+    /// <summary>Pausa tras leer un dedo, para no republicar el mismo dedo apoyado.</summary>
+    public int SameFingerDebounceMs { get; init; } = 400;
+
+    /// <summary>
+    /// Solo dev: deja que MockDevice invente un dedo cada 2s para probar el flujo sin
+    /// hardware. APAGADO por defecto a proposito. Si el SDK real no abre (caso clasico:
+    /// el agente corriendo como servicio en Session 0 no ve el USB) DeviceFactory cae a
+    /// MockDevice, que ademas reporta connected. Con el scanner continuo + auto-dedo eso
+    /// registraria asistencias fantasma cada 2s sin que nadie apoye nada.
+    /// </summary>
+    public bool MockAutoFinger { get; init; } = false;
+
+    // -- Reconexion del lector (v1.1) ---------------------------------------------
+
+    /// <summary>Cada cuantos segundos se reintenta abrir el lector cuando esta cerrado.</summary>
+    public int ReconnectSeconds { get; init; } = 2;
+
+    /// <summary>
+    /// Cada cuanto se confirma que el lector SIGUE conectado. Hace falta porque
+    /// AcquireFingerprint devuelve el mismo codigo (-8) para "no hay dedo" que para un
+    /// handle muerto: sin este chequeo, un lector desenchufado se ve igual que un lector
+    /// esperando un dedo.
+    /// </summary>
+    public int PresenceCheckSeconds { get; init; } = 30;
+
     /// <summary>Ruta del archivo de templates local (store offline-resiliente).</summary>
     public string StoragePath { get; init; } = DefaultStoragePath();
 
