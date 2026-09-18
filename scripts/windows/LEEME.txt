@@ -1,0 +1,69 @@
+==========================================================
+ LECTOR DE HUELLA - FitGym  (instalacion)   v1.1.0
+==========================================================
+Para usar el lector de huella ZKTeco (SLK20R o ZK9500) en la PC de recepcion.
+
+----------------------------------------------------------
+INSTALAR  (1 solo paso)
+----------------------------------------------------------
+1. Clic derecho en  instalar.bat  ->  "Ejecutar como administrador".
+   - Te abre el asistente del DRIVER: Siguiente / Finalizar.
+   - Enchufa el lector a un USB cuando te lo pida.
+   - El agente queda corriendo, arranca solo al iniciar sesion, y ademas
+     queda un VIGILANTE que lo revisa cada minuto y lo levanta si se cae.
+   (Si SmartScreen avisa: "Mas informacion" -> "Ejecutar de todas formas".)
+
+2. Verifica en el navegador:  http://localhost:8000/health
+   - "device" tiene que decir el modelo real (ej. "ZKTeco SLK20R").
+     Si dice "(sin lector)", mira "last_error": ahi dice por que.
+   - "reader" tiene que decir "connected".
+
+----------------------------------------------------------
+VINCULAR con tu gimnasio
+----------------------------------------------------------
+1. Entra a la app de FitGym (con tu cuenta del gym).
+2. Configuracion -> "Lector de huella" -> boton "Vincular lector".
+3. Listo: las huellas se guardan en la nube.
+   En /health, "gym" te dice a cual quedo vinculado. Si dice otro gimnasio,
+   volve a vincularlo: si no, las huellas que registres NO se guardan.
+
+----------------------------------------------------------
+QUE HAY QUE AJUSTAR EN LA PC
+----------------------------------------------------------
+- Que la PC no se suspenda y que el USB no se apague por ahorro de energia.
+- Sesion de Windows automatica, para que arranque sola despues de un corte.
+- Si es laptop: que cerrar la tapa NO la suspenda.
+
+----------------------------------------------------------
+OPCIONAL: que la puerta abra SIN el navegador
+----------------------------------------------------------
+Por defecto decide el navegador: si nadie tiene el panel abierto, la puerta
+no abre. Para que decida el agente, en appsettings.json:
+
+    "AutoDecide": true
+
+Con eso el agente reconoce el dedo, le pregunta al servidor si esa persona
+puede pasar, registra la asistencia y pulsa el rele, sin navegador.
+Verificalo en /health: "decide" debe decir "agente".
+
+OJO: sin internet NO abre. El agente no adivina vigencias.
+
+----------------------------------------------------------
+OPCIONAL: torniquete
+----------------------------------------------------------
+Con el modulo USB-rele conectado, en appsettings.json:
+
+    "TurnstileEnabled": true,
+    "RelayPort": "COM3"        <- el puerto real (mira el Administrador de
+                                  dispositivos -> Puertos (COM y LPT))
+
+En /health, "turnstile" dice "ready" si el rele responde, o "error" con el
+motivo si no.
+
+----------------------------------------------------------
+SI ALGO NO ANDA
+----------------------------------------------------------
+- Log del agente:    http://localhost:8000/logs?lines=100
+- Log del vigilante: C:\ProgramData\HuellaAgent\logs\vigilante.log
+- Quitar el agente:  clic derecho en desinstalar-tarea.bat (admin)
+==========================================================
