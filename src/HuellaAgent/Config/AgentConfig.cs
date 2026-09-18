@@ -52,6 +52,16 @@ public sealed class AgentConfig
     /// </summary>
     public bool MockAutoFinger { get; init; } = false;
 
+    /// <summary>
+    /// Puntaje minimo que tienen que sacar entre si las 3 capturas del enrolado (1:1,
+    /// escala 0-1000). Por debajo se rechaza y se pide repetir.
+    ///
+    /// Una huella mal enrolada no se arregla despues: esa persona lee mal todos los dias.
+    /// El 300 arranca igual que IdentifyThreshold; con los puntajes que ahora quedan en el
+    /// log de cada enrolado se puede subir o bajar con datos.
+    /// </summary>
+    public int EnrollMinScore { get; init; } = 300;
+
     // -- Portero autonomo (v1.2) --------------------------------------------------
 
     /// <summary>

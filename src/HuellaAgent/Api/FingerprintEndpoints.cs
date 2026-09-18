@@ -120,11 +120,35 @@ public static class FingerprintEndpoints
         });
 
         // POST enroll {cliente_id, tenant_id, template1..3} → {ok, uid}
-        api.MapPost("/enroll", async (EnrollReq body, IFingerprintDevice device, ITemplateStore store, HuellaRpc rpc, CancellationToken ct) =>
+        api.MapPost("/enroll", async (EnrollReq body, IFingerprintDevice device, ITemplateStore store, HuellaRpc rpc,
+                                      AgentConfig cfg, ILoggerFactory lf, CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(body.ClienteId) || string.IsNullOrWhiteSpace(body.TenantId)
                 || string.IsNullOrWhiteSpace(body.Template1) || string.IsNullOrWhiteSpace(body.Template2) || string.IsNullOrWhiteSpace(body.Template3))
                 return Results.Json(new { ok = false, detail = "faltan campos" }, statusCode: 400);
+
+            // Calidad del enrolado ANTES de guardar. Las 3 capturas tienen que parecerse
+            // entre sí: si el socio movió el dedo, lo apoyó de canto o usó dedos distintos,
+            // el template que se guarda queda flojo y esa persona va a leer mal TODOS los
+            // días — y eso ya no se arregla después. Es más barato pedir que repita ahora.
+            var pares = new[]
+            {
+                device.Match(body.Template1, body.Template2),
+                device.Match(body.Template1, body.Template3),
+                device.Match(body.Template2, body.Template3),
+            };
+            var peor = pares.Min();
+            var logEnroll = lf.CreateLogger("Enroll");
+            logEnroll.LogInformation("enroll: capturas {A}/{B}/{C} (minimo exigido {Min})",
+                pares[0], pares[1], pares[2], cfg.EnrollMinScore);
+
+            if (peor < cfg.EnrollMinScore)
+                return Results.Json(new
+                {
+                    ok = false,
+                    detail = "Las 3 capturas no coinciden entre sí. Apoyá el MISMO dedo, bien centrado y sin moverlo, y volvé a intentar.",
+                    calidad = peor,
+                }, statusCode: 422);
 
             string merged;
             try { merged = device.Merge(body.Template1, body.Template2, body.Template3); }

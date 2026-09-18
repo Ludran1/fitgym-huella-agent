@@ -48,6 +48,13 @@ public interface IFingerprintDevice
     string Merge(string template1, string template2, string template3);
 
     /// <summary>
+    /// Compara dos capturas entre sí (1:1) y devuelve el puntaje, 0 si no se parecen.
+    /// Se usa al enrolar: si las 3 capturas del "mismo dedo" no se parecen, la huella
+    /// guardada va a leer mal para siempre y conviene repetirla ahí mismo.
+    /// </summary>
+    int Match(string template1, string template2);
+
+    /// <summary>
     /// Carga <paramref name="db"/> en la DB en memoria, captura un dedo y hace 1:N.
     /// Devuelve el match, o null si hubo dedo pero sin coincidencia (→ 404).
     /// Lanza NoFingerException si no hubo dedo (→ 408).

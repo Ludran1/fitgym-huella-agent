@@ -66,6 +66,10 @@ public sealed class FakeDevice : IFingerprintDevice
 
     public string Merge(string t1, string t2, string t3) => $"MERGED::{t1}.{t2}.{t3}";
 
+    /// <summary>Puntaje 1:1 que devuelve el doble; los tests lo mueven para probar el enrolado flojo.</summary>
+    public int MatchScore { get; set; } = 900;
+    public int Match(string template1, string template2) => MatchScore;
+
     public IdentifyMatch? Identify(string probeTemplate, IReadOnlyList<StoredTemplate> db, string dbKey)
     {
         // Simula el cache de la DB en memoria del SDK: solo se rearma si cambio la clave.

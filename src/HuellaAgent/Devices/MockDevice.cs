@@ -61,6 +61,9 @@ public sealed class MockDevice : IFingerprintDevice
         return Convert.ToBase64String(raw);
     }
 
+    /// <summary>Sin hardware no hay como comparar: devuelve un puntaje alto para no trabar el flujo de dev.</summary>
+    public int Match(string template1, string template2) => 900;
+
     public IdentifyMatch? Identify(string probeTemplate, IReadOnlyList<StoredTemplate> db, string dbKey)
     {
         if (db.Count == 0) return null;                  // dedo presente, sin match -> 404

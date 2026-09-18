@@ -197,6 +197,24 @@ public sealed class ZkfpDevice : IFingerprintDevice, IDisposable
         }
     }
 
+    /// <summary>
+    /// 1:1 entre dos capturas. El SDK aplica su propio piso (FP_THRESHOLD_CODE, 50 por
+    /// defecto) y devuelve 0 cuando no llega; arriba de eso, el puntaje en escala 0-1000.
+    /// </summary>
+    public int Match(string template1, string template2)
+    {
+        lock (_sdkLock)
+        {
+            IntPtr db = zkfp2.DBInit();
+            if (db == IntPtr.Zero) throw new DeviceUnavailableException("zkfp2.DBInit fallo");
+            try
+            {
+                return zkfp2.DBMatch(db, zkfp2.Base64ToBlob(template1), zkfp2.Base64ToBlob(template2));
+            }
+            finally { zkfp2.DBFree(db); }
+        }
+    }
+
     /// <summary>1:N contra la DB cacheada del SDK (se rearma solo si cambio dbKey).</summary>
     public IdentifyMatch? Identify(string probeTemplate, IReadOnlyList<StoredTemplate> items, string dbKey)
     {

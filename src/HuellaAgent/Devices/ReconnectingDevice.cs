@@ -132,6 +132,13 @@ public sealed class ReconnectingDevice : IFingerprintDevice, IDisposable
         catch (DeviceUnavailableException ex) { Perdido(ex); throw; }
     }
 
+    public int Match(string t1, string t2)
+    {
+        var lector = Activo();
+        try { return lector.Match(t1, t2); }
+        catch (DeviceUnavailableException ex) { Perdido(ex); throw; }
+    }
+
     public IdentifyMatch? Identify(string probeTemplate, IReadOnlyList<StoredTemplate> db, string dbKey)
     {
         var lector = Activo();
