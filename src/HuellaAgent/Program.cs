@@ -51,8 +51,11 @@ builder.Services.ConfigureHttpJsonOptions(o =>
     o.SerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
 });
 
-// CORS: una pagina admin https puede llamar a localhost (Secure Context).
-builder.Services.AddCors(o => o.AddDefaultPolicy(p => p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
+// CORS: una pagina admin https puede llamar a localhost (Secure Context), pero SOLO el
+// panel. Con `*` —como estaba— y la api-key vacia, cualquier pagina abierta en el
+// navegador de la PC de recepcion podia pedirle capturas al lector.
+builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
+    p.WithOrigins(bootCfg.AllowedOrigins).AllowAnyHeader().AllowAnyMethod()));
 
 builder.Services.AddSingleton<ITemplateStore>(sp =>
     new LocalFileStore(sp.GetRequiredService<AgentConfig>().StoragePath));

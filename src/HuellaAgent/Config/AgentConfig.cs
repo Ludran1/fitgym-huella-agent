@@ -13,6 +13,24 @@ public sealed class AgentConfig
     /// <summary>x-api-key opcional. Vacio = sin auth (dev). Si se setea, /api/* lo exige.</summary>
     public string ApiKey { get; init; } = "";
 
+    /// <summary>
+    /// Desde que paginas se acepta hablarle al agente. Antes era CORS abierto (`*`): con la
+    /// api-key vacia —que es como viene— CUALQUIER pagina abierta en el navegador de esa PC
+    /// podia pedirle capturas al lector. Ahora solo el panel y el dev local.
+    ///
+    /// Se puede ampliar por appsettings si el panel cambia de dominio. Ojo: esto lo hace
+    /// cumplir el NAVEGADOR; un programa corriendo en la misma PC igual puede llamar al
+    /// agente, y para eso esta la api-key.
+    /// </summary>
+    public string[] AllowedOrigins { get; init; } =
+    {
+        "https://www.fitgym-app.com",
+        "https://fitgym-app.com",
+        "http://localhost:8080",
+        "http://localhost:8081",
+        "http://localhost:5173",
+    };
+
     /// <summary>Ventana de captura del identify, en segundos. Decidido 2026-06-14 = 3-5s.</summary>
     public int IdentifyTimeoutSeconds { get; init; } = 4;
 

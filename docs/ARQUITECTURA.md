@@ -335,33 +335,28 @@ redeployar. La contracara es que un build roto se empuja a todos los gimnasios a
 
 ## Riesgos abiertos
 
-### 🔴 Crítico — el umbral de identificación está en cero
+### ✅ Resuelto (18-sep) — el umbral de identificación
 
-`IdentifyThreshold` vale `0` por defecto (`Config/AgentConfig.cs`) y el `appsettings.json` del
-instalador no lo pisa. Como el chequeo es:
+Estuvo en `0` mucho tiempo, lo que en la práctica dejaba mandando al piso interno del SDK
+(70/1000). Desde la v1.1 vale **300**, elegido con las primeras mediciones contra el lector
+real: los aciertos dieron entre 493 y 874, y un dedo ajeno se rechazó 11 de 11 veces.
+Cada `identify` deja su puntaje en el log, así que se puede recalibrar con datos.
 
-```csharp
-if (score < _threshold) return null;   // bajo el umbral calibrado (R1)
-```
+### 🟡 Mitigado (18-sep) — quién puede hablarle al agente
 
-…**cualquier match que devuelva el SDK pasa**, por bajo que sea su score. Es la R1 que el
-README marca como pendiente de calibrar con dedos reales antes de un piloto: admitir al
-cliente equivocado es el peor fallo posible del producto.
+`ApiKey` viene vacía, así que `/api/*` no exige nada. Antes eso se sumaba a un CORS abierto
+(`Access-Control-Allow-Origin: *`) y **cualquier página abierta en el navegador de esa PC**
+podía pedirle capturas al lector.
 
-### 🟠 Alto — la api-key no filtra nada
+Desde la v1.1.1 el CORS sólo admite los orígenes de `Agent:AllowedOrigins` (el panel y el
+dev local), así que esa vía quedó cerrada. Lo hace cumplir el navegador: un programa
+corriendo en la misma PC igual puede llamar al agente, y para eso está `Agent:ApiKey` +
+`VITE_FINGERPRINT_API_KEY` con el mismo valor, que sigue pendiente.
 
-Verificado contra el agente corriendo: `capture` devuelve `200` sin mandar ninguna clave, y
-también con una inventada. Sumado a `Access-Control-Allow-Origin: *`, cualquier página abierta
-en el navegador de esa PC puede pedirle capturas al lector.
+### ✅ Resuelto (18-sep) — dos capturas peleándose por el mismo dedo
 
-Se cierra seteando `Agent:ApiKey` en el `appsettings.json` del instalador y
-`VITE_FINGERPRINT_API_KEY` en el frontend con el mismo valor.
-
-### 🟠 Medio — dos capturas concurrentes se pelean por el mismo dedo
-
-Reproducido: con dos requests de captura abiertas, una se come el dedo y la otra agota su
-ventana. Es exactamente lo que arregla el parche de **escáner continuo (v1.0.3)**, todavía sin
-aplicar.
+El escáner continuo ya está aplicado: un único hilo es dueño del SDK y `/identify` sólo
+consume su buffer. Además el frontend coordina las pestañas con un Web Lock.
 
 ### 🔵 A saber — el `timeout` de capture está en segundos
 
