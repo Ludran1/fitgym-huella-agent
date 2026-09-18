@@ -348,7 +348,7 @@ Cada `identify` deja su puntaje en el log, así que se puede recalibrar con dato
 (`Access-Control-Allow-Origin: *`) y **cualquier página abierta en el navegador de esa PC**
 podía pedirle capturas al lector.
 
-Desde la v1.1.1 el CORS sólo admite los orígenes de `Agent:AllowedOrigins` (el panel y el
+Desde la v1.1.2 el CORS sólo admite los orígenes de `Agent:AllowedOrigins` (el panel y el
 dev local), así que esa vía quedó cerrada. Lo hace cumplir el navegador: un programa
 corriendo en la misma PC igual puede llamar al agente, y para eso está `Agent:ApiKey` +
 `VITE_FINGERPRINT_API_KEY` con el mismo valor, que sigue pendiente.
