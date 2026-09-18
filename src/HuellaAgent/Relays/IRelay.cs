@@ -9,6 +9,9 @@ public interface IRelay
 {
     bool IsConnected { get; }
 
+    /// <summary>Por que no esta disponible el rele (para /health). null = sin problemas.</summary>
+    string? LastError { get; }
+
     /// <summary>Cierra el contacto N.O. por <paramref name="pulseMs"/> y lo abre (pulso momentaneo).</summary>
     Task PulseAsync(int pulseMs, CancellationToken ct);
 }

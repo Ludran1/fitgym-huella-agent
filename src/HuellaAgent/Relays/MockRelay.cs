@@ -7,6 +7,7 @@ public sealed class MockRelay : IRelay
     public MockRelay(ILogger<MockRelay> log) => _log = log;
 
     public bool IsConnected => true;
+    public string? LastError => null;
 
     public Task PulseAsync(int pulseMs, CancellationToken ct)
     {

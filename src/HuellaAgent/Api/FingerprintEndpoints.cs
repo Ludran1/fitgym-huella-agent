@@ -63,7 +63,10 @@ public static class FingerprintEndpoints
                 connected_since = device.ConnectedSinceUtc,
                 last_read_at = scanner.UltimaLecturaUtc,
                 last_error = device.LastError,
+                // "off" = este gym no tiene torniquete · "ready" = el rele responde ·
+                // "error" = esta configurado pero no se puede abrir (con el motivo al lado).
                 turnstile = !cfg.TurnstileEnabled ? "off" : relay.IsConnected ? "ready" : "error",
+                turnstile_error = cfg.TurnstileEnabled ? relay.LastError : null,
                 version = Version,
             });
         });

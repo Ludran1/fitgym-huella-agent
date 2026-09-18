@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using HuellaAgent.Config;
 using HuellaAgent.Devices;
+using HuellaAgent.Relays;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -116,7 +117,7 @@ public class ReconexionTests
     }
 
     [Fact]
-    public async Task El_torniquete_sin_rele_contesta_503_con_el_motivo()
+    public async Task El_gym_sin_torniquete_sigue_contestando_409()
     {
         await using var app = new AgentFactory();
         var http = app.CreateClient();
@@ -125,5 +126,49 @@ public class ReconexionTests
         // apagarse solo en los gyms sin puerta. Eso no cambia.
         var sinTorniquete = await http.PostAsJsonAsync("/api/turnstile/open", new { tenant_id = "t1" });
         Assert.Equal(HttpStatusCode.Conflict, sinTorniquete.StatusCode);
+    }
+
+    /// <summary>
+    /// Caso real del 17-sep en la PC de Adriano: `Agent:RelayPort = COM3` pero el rele no
+    /// estaba enchufado (no habia NINGUN puerto COM). El agente caia a MockRelay, que se
+    /// reporta conectado, asi que /health decia torniquete "ready" y cada apertura
+    /// contestaba ok — con la puerta sin moverse.
+    /// </summary>
+    [Fact]
+    public async Task Un_rele_que_no_abre_no_se_hace_pasar_por_conectado()
+    {
+        var cfg = new AgentConfig { TurnstileEnabled = true, RelayPort = "COM99" };
+        var relay = new ReconnectingRelay(
+            () => throw new FileNotFoundException("Could not find file 'COM99'."),
+            cfg, NullLogger.Instance);
+
+        Assert.False(relay.IsConnected);
+        Assert.Contains("COM99", relay.LastError);
+
+        var ex = await Assert.ThrowsAnyAsync<Exception>(() => relay.PulseAsync(700, CancellationToken.None));
+        Assert.Contains("COM99", ex.Message);
+    }
+
+    [Fact]
+    public async Task El_rele_se_abre_al_enchufarlo_sin_reiniciar_el_agente()
+    {
+        var enchufado = false;
+        var cfg = new AgentConfig { TurnstileEnabled = true, RelayPort = "COM99" };
+        var relay = new ReconnectingRelay(
+            () => enchufado ? new FakeRelay() : throw new FileNotFoundException("no esta"),
+            cfg, NullLogger.Instance);
+
+        Assert.False(relay.IsConnected);
+        enchufado = true;                       // alguien conecta el rele con el agente vivo
+        await relay.PulseAsync(700, CancellationToken.None);
+        Assert.True(relay.IsConnected);
+        Assert.Null(relay.LastError);
+    }
+
+    private sealed class FakeRelay : IRelay
+    {
+        public bool IsConnected => true;
+        public string? LastError => null;
+        public Task PulseAsync(int pulseMs, CancellationToken ct) => Task.CompletedTask;
     }
 }
