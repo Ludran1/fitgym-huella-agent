@@ -44,11 +44,17 @@ Integra el **ZKFinger SDK 5.3.0.33** vía el wrapper oficial `libzkfpcsharp` (cl
 en `src/HuellaAgent/sdk/win-x64/libzkfpcsharp.dll` y solo se referencia al publicar para
 win-x64 (define `ZKFP`); en Linux/CI no se compila → build/test cross-platform.
 
-**Build del .exe (se puede hacer DESDE Linux):**
+**Build del .exe (se puede hacer DESDE Linux). Necesita el SDK de .NET 10:**
 ```bash
 dotnet publish src/HuellaAgent -r win-x64 --self-contained -c Release -p:PublishSingleFile=true
 ```
-El wrapper queda embebido en `HuellaAgent.exe`. (Ya verificado que compila.)
+El wrapper queda embebido en `HuellaAgent.exe` (~104 MB: trae el runtime adentro).
+
+> **net10.0 desde el 17-sep** (antes net8.0, que pierde soporte el 10-nov-2026). Verificado
+> en Windows con el lector físico: abre el `ZKTeco SLK20R`, baja los templates, y `capture` /
+> `identify` esperan su ventana y contestan 408 sin dedo. Importaba probarlo con el lector
+> real porque .NET 10 cambió dónde busca un exe single-file las librerías nativas; el
+> `libzkfp.dll` lo instala el SDK de ZKTeco en System32, que sigue estando en la búsqueda.
 
 **En la PC Windows:**
 1. Correr el **`setup.exe`** del SDK → instala el **driver USB** + el `libzkfp.dll` **nativo**
