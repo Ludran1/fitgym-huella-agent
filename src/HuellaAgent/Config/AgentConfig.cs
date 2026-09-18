@@ -16,8 +16,16 @@ public sealed class AgentConfig
     /// <summary>Ventana de captura del identify, en segundos. Decidido 2026-06-14 = 3-5s.</summary>
     public int IdentifyTimeoutSeconds { get; init; } = 4;
 
-    /// <summary>Umbral de DBIdentify del SDK. R1: calibrar con hardware real (FAR/FRR).</summary>
-    public int IdentifyThreshold { get; init; } = 0;
+    /// <summary>
+    /// Umbral de DBIdentify del SDK, escala 0-1000. Por debajo, el match se descarta.
+    ///
+    /// Estuvo en 0 hasta el 18-sep, que en la practica dejaba mandando al piso interno del
+    /// SDK (70). El 300 sale de las primeras mediciones reales: 13 lecturas de dedos
+    /// enrolados dieron entre **493 y 874**, y 11 lecturas de un dedo ajeno se rechazaron
+    /// todas. O sea, 300 queda comodo por debajo del peor acierto y muy por encima del
+    /// piso viejo. Subirlo mas exige medir mas dedos y mas gente antes.
+    /// </summary>
+    public int IdentifyThreshold { get; init; } = 300;
 
     // -- Scanner continuo (v1.0.3) ------------------------------------------------
     // El sensor se mantiene leyendo SIEMPRE en un loop de fondo en vez de armarse por

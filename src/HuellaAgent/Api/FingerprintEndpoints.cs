@@ -60,6 +60,9 @@ public static class FingerprintEndpoints
                 // muerta entre polls); "per_request" = camino viejo. Sirve para verificar
                 // on-site, desde el navegador, que el fix esta activo en esa PC.
                 scan = scanner.Enabled ? "continuous" : "per_request",
+                // Con que exigencia esta corriendo ESTE gym (escala 0-1000). Sin esto no
+                // habia forma de saber, sin entrar a la PC, si el umbral quedo calibrado.
+                threshold = cfg.IdentifyThreshold,
                 // Cambia en cada arranque: le dice al navegador que el agente se reinicio,
                 // sin tener que adivinarlo por un /health que dejo de responder.
                 boot_id = BootId,
@@ -149,11 +152,13 @@ public static class FingerprintEndpoints
         // buffer y se hace el 1:N. Un dedo apoyado mientras el frontend dormia entre polls
         // ya esta bufferado y vuelve al instante: se acabo la zona muerta de ~25% que
         // causaba el "a veces agarra, a veces no".
-        api.MapPost("/identify", async (IdentifyReq body, IFingerprintDevice device, FingerprintScanner scanner, ITemplateStore store, AgentConfig cfg, CancellationToken ct) =>
+        api.MapPost("/identify", async (IdentifyReq body, IFingerprintDevice device, FingerprintScanner scanner,
+                                        ITemplateStore store, AgentConfig cfg, ILoggerFactory lf, CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(body.TenantId))
                 return Results.StatusCode(400);
 
+            var log = lf.CreateLogger("Identify");
             var db = await store.LoadAsync(body.TenantId);
             try
             {
@@ -162,6 +167,7 @@ public static class FingerprintEndpoints
                     // Camino legacy (Agent:ContinuousScan=false): valvula de escape si el
                     // scanner se porta mal contra hardware real, sin necesidad de rollback.
                     var legacy = await device.IdentifyAsync(db, cfg.IdentifyTimeoutSeconds, ct);
+                    Anotar(log, legacy, db, cfg);
                     return Match(legacy, db);
                 }
 
@@ -171,6 +177,7 @@ public static class FingerprintEndpoints
                 // La clave incluye el tenant Y la version del store: la DB en memoria del
                 // SDK se reusa entre polls y se rearma sola al enrolar o cambiar de tenant.
                 var match = device.Identify(probe.Template, db, $"{body.TenantId}:{store.Version}");
+                Anotar(log, match, db, cfg);
                 return Match(match, db);
             }
             catch (NoFingerException) { return Results.StatusCode(408); }       // sin dedo
@@ -226,6 +233,28 @@ public static class FingerprintEndpoints
 
             return Results.Json(new { ok = true, tenant_id = tenantId, gym, templates = res?.Templates.Count ?? 0 });
         }).AddEndpointFilter(ApiKeyFilter);
+    }
+
+    /// <summary>
+    /// Deja el puntaje de CADA lectura en el log del agente.
+    ///
+    /// Hasta el 18-sep el puntaje solo quedaba cuando el navegador llegaba a marcar la
+    /// asistencia, asi que el umbral se iba a calibrar a ciegas. Con esto, una semana de
+    /// uso normal deja cientos de lecturas de socios reales en
+    /// %ProgramData%\HuellaAgent\logs, que es el insumo para decidir el umbral de verdad.
+    /// Se anota el uid interno del lector, no el uuid de la persona: alcanza para la
+    /// estadistica y el log queda con menos datos personales.
+    /// </summary>
+    private static void Anotar(ILogger log, IdentifyMatch? match, IReadOnlyList<StoredTemplate> db, AgentConfig cfg)
+    {
+        if (match is null)
+        {
+            log.LogInformation("identify: dedo leido SIN coincidencia (umbral {Umbral}, {Cuantas} huellas cargadas)",
+                cfg.IdentifyThreshold, db.Count);
+            return;
+        }
+        log.LogInformation("identify: match uid={Uid} score={Score} (umbral {Umbral}, {Cuantas} huellas cargadas)",
+            match.Uid, match.Score, cfg.IdentifyThreshold, db.Count);
     }
 
     /// <summary>Traduce el match del SDK al contrato HTTP: 200 con cliente_id, o 404.</summary>
