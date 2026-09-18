@@ -42,6 +42,9 @@ public static class FingerprintEndpoints
                                      FingerprintScanner scanner, PairingStore pairing, IRelay relay, AgentConfig cfg) =>
         {
             var vinculo = pairing.Load();
+            // Reintenta abrir el rele (con su propio freno): si lo enchufaron con el agente
+            // corriendo, el chip de la app se entera solo, sin tener que abrir la puerta.
+            var releOk = cfg.TurnstileEnabled && relay.TryConnect();
             return TypedResults.Json(new
             {
                 ok = true,
@@ -65,7 +68,7 @@ public static class FingerprintEndpoints
                 last_error = device.LastError,
                 // "off" = este gym no tiene torniquete · "ready" = el rele responde ·
                 // "error" = esta configurado pero no se puede abrir (con el motivo al lado).
-                turnstile = !cfg.TurnstileEnabled ? "off" : relay.IsConnected ? "ready" : "error",
+                turnstile = !cfg.TurnstileEnabled ? "off" : releOk ? "ready" : "error",
                 turnstile_error = cfg.TurnstileEnabled ? relay.LastError : null,
                 version = Version,
             });

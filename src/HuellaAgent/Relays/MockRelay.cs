@@ -8,6 +8,7 @@ public sealed class MockRelay : IRelay
 
     public bool IsConnected => true;
     public string? LastError => null;
+    public bool TryConnect() => true;
 
     public Task PulseAsync(int pulseMs, CancellationToken ct)
     {

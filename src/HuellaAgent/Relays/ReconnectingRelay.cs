@@ -21,6 +21,7 @@ public sealed class ReconnectingRelay : IRelay, IDisposable
     private readonly string _puerto;
     private readonly object _gate = new();
     private IRelay? _rele;
+    private DateTime _ultimoIntento = DateTime.MinValue;
 
     public ReconnectingRelay(Func<IRelay> abrir, AgentConfig cfg, ILogger log)
     {
@@ -33,11 +34,26 @@ public sealed class ReconnectingRelay : IRelay, IDisposable
     public bool IsConnected { get { lock (_gate) return _rele?.IsConnected == true; } }
     public string? LastError { get; private set; }
 
+    /// <summary>
+    /// Lo llama /health. Con freno de 5 s para no abrir el COM en cada poll del chip de
+    /// estado: enchufar el rele tiene que verse en la app sola, sin que nadie abra la puerta.
+    /// </summary>
+    public bool TryConnect()
+    {
+        lock (_gate)
+        {
+            if (_rele?.IsConnected == true) return true;
+            if (DateTime.UtcNow - _ultimoIntento < TimeSpan.FromSeconds(5)) return false;
+        }
+        return Intentar();
+    }
+
     private bool Intentar()
     {
         lock (_gate)
         {
             if (_rele?.IsConnected == true) return true;
+            _ultimoIntento = DateTime.UtcNow;
             Cerrar();
             try
             {

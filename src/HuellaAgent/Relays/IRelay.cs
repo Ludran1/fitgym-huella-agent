@@ -12,6 +12,12 @@ public interface IRelay
     /// <summary>Por que no esta disponible el rele (para /health). null = sin problemas.</summary>
     string? LastError { get; }
 
+    /// <summary>
+    /// Intenta abrir el rele si esta cerrado. true = listo. La llama /health con freno
+    /// propio: enchufar el rele tiene que verse en la app sin que nadie abra la puerta.
+    /// </summary>
+    bool TryConnect();
+
     /// <summary>Cierra el contacto N.O. por <paramref name="pulseMs"/> y lo abre (pulso momentaneo).</summary>
     Task PulseAsync(int pulseMs, CancellationToken ct);
 }

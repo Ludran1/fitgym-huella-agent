@@ -28,6 +28,7 @@ public sealed class UsbRelay : IRelay, IDisposable
 
     public bool IsConnected => _port.IsOpen;
     public string? LastError => _port.IsOpen ? null : "el puerto se cerro";
+    public bool TryConnect() => _port.IsOpen;
 
     public async Task PulseAsync(int pulseMs, CancellationToken ct)
     {
