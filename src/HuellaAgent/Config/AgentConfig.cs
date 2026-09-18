@@ -52,6 +52,22 @@ public sealed class AgentConfig
     /// </summary>
     public bool MockAutoFinger { get; init; } = false;
 
+    // -- Portero autonomo (v1.2) --------------------------------------------------
+
+    /// <summary>
+    /// true = el AGENTE decide y abre, sin navegador: dedo → 1:N local → registrar_acceso
+    /// (el juez unico en Supabase) → pulso al rele. Con esto la puerta funciona con Chrome
+    /// cerrado, que es el limite que teniamos hasta el 18-sep.
+    ///
+    /// Mientras este prendido, el panel NO debe pedir identify: /health anuncia
+    /// `decide: "agente"` y el listener del navegador se apaga solo. Si los dos preguntaran
+    /// se robarian el dedo y la puerta abriria dos veces.
+    /// </summary>
+    public bool AutoDecide { get; init; } = false;
+
+    /// <summary>Anti-rebote del portero: el mismo dedo apoyado no vuelve a pedir veredicto.</summary>
+    public int AutoDecideDedupSeconds { get; init; } = 6;
+
     // -- Reconexion del lector (v1.1) ---------------------------------------------
 
     /// <summary>Cada cuantos segundos se reintenta abrir el lector cuando esta cerrado.</summary>

@@ -66,6 +66,65 @@ public sealed class HuellaRpc
         return null;
     }
 
+    /// <summary>Veredicto de `registrar_acceso`: el server ya decidió y ya registró.</summary>
+    public sealed record Veredicto(bool Permitido, bool AbrirPuerta, string? Motivo, string? Tipo,
+                                   string? Nombre, string? Mensaje, bool YaHoy);
+
+    /// <summary>
+    /// registrar_acceso(token, persona, metodo, score) → el JUEZ ÚNICO (migración
+    /// 20260918124500). Decide vigencia, inicio, estado, cupo, "ya entró hoy" y staff;
+    /// registra la asistencia o el rechazo; y contesta si hay que abrir la puerta.
+    ///
+    /// Es lo que permite que la puerta funcione con el navegador cerrado: hasta ahora
+    /// quien decidía era la pestaña de Chrome.
+    /// </summary>
+    public async Task<Veredicto?> RegistrarAccesoAsync(string personaId, string metodo, int? score, CancellationToken ct)
+    {
+        var c = Creds();
+        if (c is null) return null;
+        try
+        {
+            var resp = await _http.SendAsync(Req(c, "registrar_acceso",
+                new { p_token = c.Token, p_persona_id = personaId, p_metodo = metodo, p_score = score }), ct);
+            if (!resp.IsSuccessStatusCode)
+            {
+                _log.LogWarning("registrar_acceso fallo: {S}", resp.StatusCode);
+                return null;
+            }
+            var j = await resp.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: ct);
+            if (!j.TryGetProperty("ok", out var ok) || !ok.GetBoolean())
+            {
+                _log.LogWarning("registrar_acceso rechazo el token: {Detalle}",
+                    j.TryGetProperty("detail", out var d) ? d.GetString() : "(sin detalle)");
+                return null;
+            }
+            return new Veredicto(
+                Permitido: Bool(j, "permitido"),
+                AbrirPuerta: Bool(j, "abrir_puerta"),
+                Motivo: Str(j, "motivo"),
+                Tipo: Str(j, "tipo"),
+                Nombre: Str(j, "nombre"),
+                Mensaje: Str(j, "mensaje"),
+                YaHoy: Bool(j, "ya_hoy"));
+        }
+        catch (Exception ex)
+        {
+            // Sin internet o Supabase caído: el portero no puede decidir. Que lo resuelva
+            // quien llama (hoy: no abrir; cuando exista la copia local, decidir con ella).
+            _log.LogWarning(ex, "registrar_acceso no respondio");
+            return null;
+        }
+    }
+
+    private static bool Bool(JsonElement j, string campo) =>
+        j.TryGetProperty(campo, out var v) && v.ValueKind == JsonValueKind.True;
+
+    private static string? Str(JsonElement j, string campo) =>
+        j.TryGetProperty(campo, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+
+    /// <summary>tenant_id del vínculo activo (el gym al que está vinculado el lector).</summary>
+    public string? TenantId => _pairing.Load()?.TenantId;
+
     public sealed record TemplatesResult(string TenantId, IReadOnlyList<StoredTemplate> Templates);
 
     /// <summary>huella_templates(token) → {ok, tenant_id, templates} del tenant.</summary>

@@ -60,6 +60,10 @@ public static class FingerprintEndpoints
                 // muerta entre polls); "per_request" = camino viejo. Sirve para verificar
                 // on-site, desde el navegador, que el fix esta activo en esa PC.
                 scan = scanner.Enabled ? "continuous" : "per_request",
+                // QUIÉN decide y abre. "agente" = el portero autónomo está activo y el panel
+                // tiene que dejar de pedir identify (si no, se roban el dedo y la puerta
+                // abre dos veces). "navegador" = como siempre.
+                decide = cfg.AutoDecide && scanner.Enabled ? "agente" : "navegador",
                 // Con que exigencia esta corriendo ESTE gym (escala 0-1000). Sin esto no
                 // habia forma de saber, sin entrar a la PC, si el umbral quedo calibrado.
                 threshold = cfg.IdentifyThreshold,
