@@ -55,7 +55,7 @@ public sealed class AgentConfig
     /// handle muerto: sin este chequeo, un lector desenchufado se ve igual que un lector
     /// esperando un dedo.
     /// </summary>
-    public int PresenceCheckSeconds { get; init; } = 30;
+    public int PresenceCheckSeconds { get; init; } = 10;
 
     /// <summary>Ruta del archivo de templates local (store offline-resiliente).</summary>
     public string StoragePath { get; init; } = DefaultStoragePath();

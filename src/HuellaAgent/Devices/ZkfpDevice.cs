@@ -46,6 +46,12 @@ public sealed class ZkfpDevice : IFingerprintDevice, IDisposable
         _threshold = cfg.IdentifyThreshold;
         _presencia = TimeSpan.FromSeconds(Math.Max(5, cfg.PresenceCheckSeconds));
 
+        // Primero lo barato y lo que no miente: si Windows no ve ningun lector ZKTeco, no
+        // tiene sentido molestar al SDK, que ademas podria abrir un lector fantasma con su
+        // estado cacheado y dejar a /health diciendo "connected" sin hardware detras.
+        if (!UsbPresencia.HayLector())
+            throw new DeviceUnavailableException("Windows no ve ningun lector ZKTeco enchufado");
+
         // ALREADY_INIT (1) NO es un error: pasa al reabrir el lector dentro del mismo
         // proceso si un Terminate anterior no llego a correr. Antes esto tiraba
         // "zkfp2.Init fallo" y el agente se quedaba sin lector hasta reiniciarse.
@@ -142,6 +148,11 @@ public sealed class ZkfpDevice : IFingerprintDevice, IDisposable
             if (DateTime.UtcNow - _ultimoChequeo > _presencia)
             {
                 _ultimoChequeo = DateTime.UtcNow;
+                // Se le pregunta a WINDOWS, no al SDK: con el lector desenchufado el SDK
+                // sigue diciendo que hay uno (GetDeviceCount=1 y AcquireFingerprint=-8),
+                // verificado el 18-sep. El chequeo del SDK queda igual, de respaldo.
+                if (!UsbPresencia.HayLector())
+                    throw new DeviceUnavailableException("Windows ya no ve el lector (desenchufado)");
                 int cuantos = zkfp2.GetDeviceCount();
                 if (cuantos <= 0)
                     throw new DeviceUnavailableException($"el lector ya no aparece (GetDeviceCount={cuantos})");
