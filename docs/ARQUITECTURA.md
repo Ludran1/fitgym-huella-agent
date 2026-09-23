@@ -93,8 +93,8 @@ Eso mantiene el agente vivo para que `/health` pueda contar qué pasó, pero sig
 |---|---|---|---|
 | `GET /health` | abierto | — | `{ok, reader, device, templates_loaded, durable, version}` |
 | `GET /logs?lines=N` | abierto | — | texto · cola del log de Serilog |
-| `POST /api/fingerprint/capture` | filtro | `{timeout}` **en segundos** | `{template, quality}` · `408` sin dedo · `503` sin lector |
-| `POST /api/fingerprint/enroll` | filtro | `{cliente_id, tenant_id, template1..3}` | `{ok, uid, durable}` · `409` otro gym · `422` merge · `400` |
+| `POST /api/fingerprint/capture` | filtro | `{timeout}` **en segundos** | `{template, mismo_apoyo}` · `408` sin dedo · `503` sin lector |
+| `POST /api/fingerprint/enroll` | filtro | `{cliente_id, tenant_id, template1..3}` | `{ok, uid, durable, calidad, pares}` · `409` otro gym · `422` capturas flojas o merge · `400` |
 | `POST /api/fingerprint/identify` | filtro | `{tenant_id}` | `{ok, cliente_id, score}` · `404` sin match · `408` sin dedo |
 | `POST /api/pair` | filtro | `{token, supabase_url, anon_key}` | `{ok, tenant_id, gym, templates}` · `401` token inválido |
 | `POST /api/turnstile/open` | filtro | `{tenant_id}` | `{ok}` · `409` deshabilitado |
@@ -105,28 +105,74 @@ está seteada, y el `appsettings.json` del instalador no la trae. Ver
 
 ---
 
-## Los dos flujos
+## Los tres flujos
 
-### Enrolar — escribir
+### Vincular — atar el lector a un gimnasio
+
+```
+PANEL (navegador del dueño)      AGENTE (esta PC)              SUPABASE
+        │                               │                          │
+   clic "Vincular"                      │                          │
+        │  POST /api/pair               │                          │
+        │  {kiosk_token, url, key} ────▶│                          │
+        │                               │  kiosk_init(token) ─────▶│
+        │                               │◀── {tenant_id, gym} ─────│
+        │                    guarda el vínculo cifrado (DPAPI)     │
+        │                               │  huella_templates ──────▶│
+        │                               │◀── las N huellas ────────│
+        │                         → templates.json                 │
+        │◀── {ok, gym, templates: 12} ──│                          │
+```
+
+Tres cosas que el dibujo no muestra y mandan:
+
+- **El token es el `kiosk_token` del gimnasio**, no una credencial de usuario. Por eso
+  vincular no necesita que nadie inicie sesión de Windows ni del panel en esa PC.
+- **DPAPI está atado a la máquina** (`LocalMachine`). El archivo del vínculo **no se puede
+  copiar** a otra computadora: al cambiar de PC hay que volver a vincular, siempre. Está
+  bien que sea así — pero obliga a que ese paso sea un clic y nada más.
+- **Las huellas bajan solas.** El lector nuevo llega con las del gimnasio ya puestas; es la
+  parte que ya funciona bien y que nadie tiene que entender.
+
+### Enrolar — escribir una huella
 
 1. El navegador pide **tres capturas** del mismo dedo, una por una.
-2. El agente las fusiona con `DBMerge` del SDK en un único template enrolado.
-3. Lo guarda en el archivo local. Si el cliente ya tenía huella, **reusa el uid** para que la
-   base del SDK quede estable.
-4. Si está vinculado, lo sube a Supabase con `huella_enroll`.
+2. El agente compara las tres entre sí (`Match`, 1:1). Si la peor no llega a
+   `EnrollMinScore`, devuelve `422` y no guarda nada: una huella floja no se arregla
+   después, esa persona leería mal todos los días.
+3. Las fusiona con `DBMerge` en un único template enrolado.
+4. Lo guarda en el archivo local. Si el cliente ya tenía huella, **reusa el uid** para que
+   la base del SDK quede estable.
+5. Si está vinculado, lo sube a Supabase con `huella_enroll`.
 
-Sin vincular responde `durable: false` y el frontend avisa. Antes esto devolvía `ok: true`
-igual: la app decía «éxito» y la tabla en la nube quedaba vacía (arreglado en `0c21fc4`).
+Sin vincular responde `durable: false` y el frontend lo trata como error. Antes devolvía
+`ok: true` igual: la app decía «éxito» y la tabla en la nube quedaba vacía (`0c21fc4`).
+
+**Mientras dura un enrolado, ningún dedo sale del agente** — ni al portero ni a
+`/identify`. No alcanzaba con suspender el lector en cada `/capture`: un enrolado son tres
+capturas con huecos en el medio, y ahí el dedo sigue sobre el vidrio. El portero lo leía y
+le marcaba asistencia —y le abría la puerta— a la persona que estaban dando de alta. Ahora
+el scanner marca "enrolando" y la marca **caduca sola** (`EnroladoGraciaMs`), porque nadie
+le avisa al agente que se cerró el modal.
+
+Y entre una captura y la siguiente el agente **espera a que el dedo se levante**
+(`EsperaLevanteMs`). Si no se levanta, captura igual pero devuelve `mismo_apoyo: true`:
+trabar el enrolado con un error que el mostrador no puede accionar sería peor que dejar
+decidir a quien llama. El agente puede saberlo porque `TryCapture()` devuelve `null` con el
+vidrio libre; el navegador sólo podía cronometrar.
 
 ### Identificar — buscar 1:N
 
 1. Carga en memoria los templates del tenant con `DBInit` + `DBAdd`.
-2. Captura un dedo con ventana corta — **4 segundos** por defecto (`IdentifyTimeoutSeconds`).
+2. Consume un dedo del buffer del scanner continuo (ver `FingerprintScanner`).
 3. Corre `DBIdentify`, que devuelve el uid ganador y un *score*.
 4. Compara el score contra `IdentifyThreshold` y resuelve el `cliente_id`.
 
-El kiosko lo llama en loop. Con el match en mano, la asistencia la marca el propio kiosko
-contra `kiosk_marcar_asistencia` — el agente nunca toca eso.
+⚠️ **No subir `IdentifyThreshold` sin datos nuevos.** Las ocho lecturas reales que había en
+producción al 22-sep fueron 309, 400, 401, 545, 577, 633, 660 y 808, contra un umbral de
+300: la más baja entró por **nueve puntos**. La nota de calibración del 18-sep decía que
+300 quedaba "cómodo" porque trece pruebas de laboratorio dieron 493–874. En el mostrador
+no. A 350, la persona del 309 deja de entrar y nadie va a entender por qué.
 
 ### `cliente_id` no siempre es un cliente
 
@@ -379,14 +425,14 @@ hardware.
 ```bash
 # 1. ¿Está el agente y con qué dispositivo?
 curl.exe -s http://localhost:8000/health
-# → device debe decir "ZKTeco SLK20R", NO MockDevice
+# → device debe decir el modelo real (SLK20R, ZK9500...), NO MockDevice
 
 # 2. ¿Windows reconoció el lector?  (Status debe ser OK, no Error)
 powershell -Command "Get-PnpDevice -PresentOnly | Where-Object { $_.FriendlyName -match 'SLK' }"
 
 # 3. ¿Lee un dedo?  (apoyar el dedo ANTES de correrlo)
 curl.exe -s -m 20 -X POST http://localhost:8000/api/fingerprint/capture
-# → {"template":"TU9TUzIx...","quality":NN}   ← MOSS21 en base64 = template real
+# → {"template":"TU9TUzIx...","mismo_apoyo":false}   ← MOSS21 en base64 = template real
 # → {"detail":"timeout sin dedo"} + 408       ← no leyó
 
 # 4. ¿Arranca solo?
