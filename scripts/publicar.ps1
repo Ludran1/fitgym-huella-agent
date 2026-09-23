@@ -134,5 +134,9 @@ Write-Host ""
 Write-Host "LISTO  $zip  ($mb MB, v$version)" -ForegroundColor Green
 if ($SinDriver) { Write-Host "OJO: este ZIP va SIN driver. No sirve para un gimnasio." -ForegroundColor Yellow }
 Write-Host ""
-Write-Host "Falta publicarlo como release v$version en Ludran1/fitgym-huella-agent-dist:" -ForegroundColor Gray
-Write-Host "  el tag TIENE que ser v$version o launch.ps1 no va a actualizar a nadie." -ForegroundColor Gray
+Write-Host "Falta publicarlo en Ludran1/fitgym-huella-agent-dist:" -ForegroundColor Gray
+Write-Host "  1. Tag v$version   <- si no coincide, launch.ps1 no actualiza a nadie." -ForegroundColor Gray
+Write-Host "  2. Marcalo como PRE-RELEASE." -ForegroundColor Yellow
+Write-Host "     /releases/latest ignora los pre-releases: ningun gimnasio lo va a tomar." -ForegroundColor Gray
+Write-Host "  3. Instalalo A MANO en una PC y probalo con el lector." -ForegroundColor Gray
+Write-Host "  4. Recien ahi sacale la marca: pasa a ser latest y lo toman todos." -ForegroundColor Gray
