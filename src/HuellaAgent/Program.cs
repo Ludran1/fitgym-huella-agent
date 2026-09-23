@@ -99,8 +99,11 @@ try
             {
                 // Keyear el cache local por el tenant_id REAL (el que manda el frontend en
                 // enroll/identify), no por el token → si no, el identify no encontraría nada.
-                foreach (var r in result.Templates)
-                    await store.SaveAsync(result.TenantId, r.ClienteId, r.Template);
+                //
+                // REEMPLAZA, no fusiona: la lista del servidor es la verdad completa. Antes
+                // era un SaveAsync por template, que agrega y pisa pero nunca saca — un socio
+                // borrado del panel seguía abriendo la puerta en esta PC para siempre.
+                await store.ReemplazarAsync(result.TenantId, result.Templates);
                 startLog.LogInformation("Carga inicial: {Count} templates desde Supabase (tenant {Tid})",
                     result.Templates.Count, result.TenantId);
             }

@@ -43,6 +43,38 @@ public sealed class HuellaRpc
 
     private static bool Has(params string[] xs) => xs.All(x => !string.IsNullOrWhiteSpace(x));
 
+    /// <summary>
+    /// Techo del pedido que decide si la puerta abre.
+    ///
+    /// `new HttpClient()` viene con 100 SEGUNDOS de timeout, y el portero espera el
+    /// veredicto de forma secuencial: un pedido colgado —internet lento, no caido— le
+    /// congela la puerta a TODOS los que vienen atras, hasta minuto y medio. Y el socio de
+    /// adelante ya se fue.
+    ///
+    /// 5 s son doce veces lo medido contra produccion el 23-sep (400 ms de promedio,
+    /// 545 ms el peor de cinco). Pasado eso se trata como "sin veredicto", que es el camino
+    /// que ya existe: no abre y queda en el log. Preferimos que el socio pase por recepcion
+    /// a que la puerta quede muerta un minuto y medio para todo el mundo.
+    /// </summary>
+    private static readonly TimeSpan TechoVeredicto = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// El enrolado y la carga de templates son otra cosa: nadie esta esperando en la
+    /// puerta, hay alguien mirando la pantalla, y la lista de un gimnasio grande pesa.
+    /// </summary>
+    private static readonly TimeSpan TechoLargo = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Combina el techo propio con el `ct` de quien llama en vez de reemplazarlo: el de
+    /// afuera corta cuando se apaga el agente, este corta el pedido colgado.
+    /// </summary>
+    private static CancellationTokenSource ConTecho(TimeSpan techo, CancellationToken ct)
+    {
+        var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(techo);
+        return cts;
+    }
+
     private HttpRequestMessage Req(DurableCreds c, string fn, object body)
     {
         var req = new HttpRequestMessage(HttpMethod.Post,
@@ -57,8 +89,9 @@ public sealed class HuellaRpc
     {
         var c = Creds();
         if (c is null) return null;
+        using var cts = ConTecho(TechoLargo, ct);
         var resp = await _http.SendAsync(Req(c, "huella_enroll",
-            new { p_token = c.Token, p_cliente_id = clienteId, p_template = template }), ct);
+            new { p_token = c.Token, p_cliente_id = clienteId, p_template = template }), cts.Token);
         if (!resp.IsSuccessStatusCode) { _log.LogWarning("huella_enroll fallo: {S}", resp.StatusCode); return null; }
         var json = await resp.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: ct);
         if (json.TryGetProperty("ok", out var ok) && ok.GetBoolean() && json.TryGetProperty("uid", out var uid))
@@ -84,8 +117,9 @@ public sealed class HuellaRpc
         if (c is null) return null;
         try
         {
+                using var cts = ConTecho(TechoVeredicto, ct);
             var resp = await _http.SendAsync(Req(c, "registrar_acceso",
-                new { p_token = c.Token, p_persona_id = personaId, p_metodo = metodo, p_score = score }), ct);
+                new { p_token = c.Token, p_persona_id = personaId, p_metodo = metodo, p_score = score }), cts.Token);
             if (!resp.IsSuccessStatusCode)
             {
                 _log.LogWarning("registrar_acceso fallo: {S}", resp.StatusCode);
@@ -132,7 +166,8 @@ public sealed class HuellaRpc
     {
         var c = Creds();
         if (c is null) return null;
-        var resp = await _http.SendAsync(Req(c, "huella_templates", new { p_token = c.Token }), ct);
+        using var cts = ConTecho(TechoLargo, ct);
+        var resp = await _http.SendAsync(Req(c, "huella_templates", new { p_token = c.Token }), cts.Token);
         if (!resp.IsSuccessStatusCode) { _log.LogWarning("huella_templates fallo: {S}", resp.StatusCode); return null; }
         var payload = await resp.Content.ReadFromJsonAsync<RpcTemplatesResponse>(cancellationToken: ct);
         if (payload is null || !payload.ok || string.IsNullOrEmpty(payload.tenant_id)) return null;
@@ -150,7 +185,8 @@ public sealed class HuellaRpc
     {
         try
         {
-            var resp = await _http.SendAsync(Req(c, "kiosk_init", new { p_token = c.Token }), ct);
+            using var cts = ConTecho(TechoVeredicto, ct);
+            var resp = await _http.SendAsync(Req(c, "kiosk_init", new { p_token = c.Token }), cts.Token);
             if (!resp.IsSuccessStatusCode) return (false, null, null);
             var json = await resp.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: ct);
             if (!json.TryGetProperty("ok", out var ok) || !ok.GetBoolean()) return (false, null, null);

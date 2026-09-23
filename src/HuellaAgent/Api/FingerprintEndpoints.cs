@@ -285,9 +285,10 @@ public static class FingerprintEndpoints
             pairing.Save(new Pairing(body.Token, body.SupabaseUrl, body.AnonKey, tenantId, gym));
 
             // Carga inicial de templates del tenant al cache local.
+            // Reemplaza en vez de fusionar: al vincular a un gimnasio, lo que este lector
+            // tuviera de antes (otra PC, otro gym) no tiene por que sobrevivir.
             var res = await rpc.TemplatesAsync(ct);
-            if (res is not null)
-                foreach (var r in res.Templates) await store.SaveAsync(res.TenantId, r.ClienteId, r.Template);
+            if (res is not null) await store.ReemplazarAsync(res.TenantId, res.Templates);
 
             return Results.Json(new { ok = true, tenant_id = tenantId, gym, templates = res?.Templates.Count ?? 0 });
         }).AddEndpointFilter(ApiKeyFilter);

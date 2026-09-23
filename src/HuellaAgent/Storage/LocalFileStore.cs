@@ -76,6 +76,32 @@ public sealed class LocalFileStore : ITemplateStore
         finally { _lock.Release(); }
     }
 
+    public async Task ReemplazarAsync(string tenantId, IReadOnlyList<StoredTemplate> templates)
+    {
+        await _lock.WaitAsync();
+        try
+        {
+            var db = await ReadAllAsync();
+            // Se conserva el uid QUE MANDA EL SERVIDOR, no uno local: asi dos PCs del mismo
+            // gimnasio hablan de la misma persona con el mismo numero. El uid 0 o negativo
+            // no existe del lado del servidor, pero si llegara, se le da uno nuevo para no
+            // romper la DB en memoria del SDK.
+            var lista = new List<StoredTemplate>();
+            var siguiente = 1;
+            foreach (var t in templates)
+            {
+                var uid = t.Uid > 0 ? t.Uid : siguiente;
+                siguiente = Math.Max(siguiente, uid) + 1;
+                lista.Add(new StoredTemplate { ClienteId = t.ClienteId, Uid = uid, Template = t.Template });
+            }
+
+            db[tenantId] = lista;
+            await WriteAllAsync(db);
+            Interlocked.Increment(ref _version);   // invalida la DB cacheada del SDK
+        }
+        finally { _lock.Release(); }
+    }
+
     public async Task<int> CountAsync()
     {
         await _lock.WaitAsync();
