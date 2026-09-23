@@ -1,5 +1,4 @@
 using System.IO.Ports;
-using HuellaAgent.Config;
 
 namespace HuellaAgent.Relays;
 
@@ -19,10 +18,15 @@ public sealed class UsbRelay : IRelay, IDisposable
     private readonly SerialPort _port;
     private readonly ILogger<UsbRelay> _log;
 
-    public UsbRelay(AgentConfig cfg, ILogger<UsbRelay> log)
+    /// <summary>
+    /// Recibe el puerto YA RESUELTO y no la config entera: quien decide cual es lo hace
+    /// antes (ver PuertoRele), porque puede venir del archivo o de la deteccion, y este
+    /// objeto no tiene por que saber de cual de los dos.
+    /// </summary>
+    public UsbRelay(string port, ILogger<UsbRelay> log)
     {
         _log = log;
-        _port = new SerialPort(cfg.RelayPort, 9600, Parity.None, 8, StopBits.One);
+        _port = new SerialPort(port, 9600, Parity.None, 8, StopBits.One);
         _port.Open();
     }
 
