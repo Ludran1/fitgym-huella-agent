@@ -62,6 +62,20 @@ public sealed class AgentConfig
     public int SameFingerDebounceMs { get; init; } = 400;
 
     /// <summary>
+    /// Cuanto sigue "en enrolado" el lector despues de cada captura.
+    ///
+    /// Un enrolado son TRES capturas con huecos en el medio, y en esos huecos el dedo sigue
+    /// sobre el vidrio: sin esta gracia, el portero lo lee ahi y le marca asistencia —y le
+    /// abre la puerta— a la persona que esta siendo dada de alta en ese momento. Suspender
+    /// el lector tapa cada captura, no el hueco entre una y otra.
+    ///
+    /// 2,5 s cubre de sobra el rearmado del frontend (milisegundos) y su pausa de 400 ms
+    /// cuando descarta un apoyo repetido, y caduca rapido cuando el modal se cierra: la
+    /// puerta vuelve sola sin depender de que nadie avise que termino.
+    /// </summary>
+    public int EnroladoGraciaMs { get; init; } = 2500;
+
+    /// <summary>
     /// Solo dev: deja que MockDevice invente un dedo cada 2s para probar el flujo sin
     /// hardware. APAGADO por defecto a proposito. Si el SDK real no abre (caso clasico:
     /// el agente corriendo como servicio en Session 0 no ve el USB) DeviceFactory cae a

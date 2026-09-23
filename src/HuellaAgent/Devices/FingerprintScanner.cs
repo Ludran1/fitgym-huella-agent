@@ -40,6 +40,30 @@ public sealed class FingerprintScanner : BackgroundService
     private ScanProbe? _pending;
     private TaskCompletionSource _signal = NewSignal();
 
+    /// <summary>
+    /// Hasta cuando se considera que hay un ENROLADO en curso. Mientras dure, ningun dedo
+    /// sale del scanner: ni al portero, ni a /identify.
+    ///
+    /// POR QUE NO ALCANZABA CON EL LOCK. Suspender el lector tapa la ventana de CADA
+    /// /capture, pero un enrolado son tres capturas con huecos en el medio — y en esos
+    /// huecos el dedo sigue sobre el vidrio. El caso concreto: el frontend descarta un
+    /// apoyo repetido y espera 400 ms antes de volver a pedir. El loop, libre, lee ese
+    /// mismo dedo y lo publica; el portero lo toma, le marca asistencia a la persona que
+    /// esta siendo dada de alta y le abre la puerta en medio de su propio enrolado.
+    ///
+    /// Tambien cierra una carrera mas fina: `Publish()` corre FUERA del `_deviceLock` (se
+    /// captura con el lock tomado y se publica despues de soltarlo), asi que un dedo leido
+    /// justo antes de que entrara el enrolado podia caer en el buffer DESPUES de que
+    /// `SuspendAsync` lo habia limpiado. Con esto, ese `Publish` tardio tampoco entra.
+    ///
+    /// Son ticks y no un DateTime por el `Interlocked`: lo escribe el hilo del request y
+    /// lo lee el del scanner.
+    /// </summary>
+    private long _enrolandoHastaTicks;
+
+    /// <summary>true = hay un enrolado en curso (o termino recien). Ver `_enrolandoHastaTicks`.</summary>
+    public bool EnrolandoAhora => DateTime.UtcNow.Ticks < Interlocked.Read(ref _enrolandoHastaTicks);
+
     // Serializa el acceso al SDK entre el loop y el enrolado (/capture). El SDK nativo no
     // documenta thread-safety y ademas dos lectores compitiendo por el mismo dedo se roban
     // la captura entre si, asi que el enrolado pausa el loop mientras dura.
@@ -147,6 +171,11 @@ public sealed class FingerprintScanner : BackgroundService
 
     private void Publish(ScanProbe probe)
     {
+        // El dedo de un enrolado NO es alguien entrando al gimnasio: es la misma persona
+        // que esta siendo dada de alta, del otro lado del mostrador. Se descarta acá, en el
+        // unico punto por donde un dedo entra al buffer.
+        if (EnrolandoAhora) return;
+
         TaskCompletionSource toWake;
         lock (_gate)
         {
@@ -202,12 +231,27 @@ public sealed class FingerprintScanner : BackgroundService
     /// </summary>
     public async Task<IDisposable> SuspendAsync(CancellationToken ct)
     {
-        await _deviceLock.WaitAsync(ct);
+        // La marca va ANTES del lock, no despues: esperar el semaforo puede tardar lo que
+        // dure una vuelta del loop, y en ese rato un dedo ya leido podria publicarse.
+        Interlocked.Exchange(ref _enrolandoHastaTicks, DateTime.MaxValue.Ticks);
+        try
+        {
+            await _deviceLock.WaitAsync(ct);
+        }
+        catch
+        {
+            // Cancelado esperando el lector: hay que soltar la marca o el portero queda
+            // mudo para siempre por un enrolado que nunca llego a empezar.
+            Interlocked.Exchange(ref _enrolandoHastaTicks, VenceEn(_cfg.EnroladoGraciaMs));
+            throw;
+        }
         // El buffer puede tener un dedo del enrolado en curso; que no lo consuma un
         // /identify y marque asistencia en medio del alta de un socio.
         lock (_gate) { _pending = null; }
         return new Release(_deviceLock, this);
     }
+
+    private static long VenceEn(int ms) => DateTime.UtcNow.AddMilliseconds(Math.Max(0, ms)).Ticks;
 
     private sealed class Release : IDisposable
     {
@@ -219,6 +263,9 @@ public sealed class FingerprintScanner : BackgroundService
         {
             if (Interlocked.Exchange(ref _done, 1) != 0) return;
             lock (_owner._gate) { _owner._pending = null; }   // descarta el dedo del enrolado
+            // La gracia cubre el hueco ENTRE capturas: el enrolado son tres, y entre una y
+            // otra el dedo sigue apoyado. Sin esto, el portero se lo lleva en ese hueco.
+            Interlocked.Exchange(ref _owner._enrolandoHastaTicks, VenceEn(_owner._cfg.EnroladoGraciaMs));
             _sem.Release();
         }
     }

@@ -1,0 +1,51 @@
+name: CI
+
+# Hasta el 23-sep este repo no tenía CI. Cada release se probaba a mano, en UNA PC, con el
+# lector al lado — y como el agente corre oculto en la máquina de un gimnasio, un error que
+# se escapara ahí no lo iba a encontrar nadie hasta que alguien no pudiera entrar al gym.
+#
+# Corre en Windows y no en Linux a propósito: producción es Windows, `ZkfpDevice` y
+# `UsbPresencia` son código `[SupportedOSPlatform("windows")]`, y el análisis de plataforma
+# (CA1416) sólo dice la verdad acá.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Tests
+        run: dotnet test --configuration Release --logger "console;verbosity=normal"
+
+      # ── El build que de verdad se instala ───────────────────────────────────────
+      # `dotnet test` compila SIN RuntimeIdentifier, y el csproj define ZKFP sólo cuando
+      # el RID es win-x64. O sea que `ZkfpDevice.cs` y `UsbPresencia.cs` —el código que
+      # habla con el lector, y el único que corre en un gimnasio— NO se compilan en los
+      # tests. Hoy un error de sintaxis ahí pasa los 34 tests y se descubre instalando.
+      #
+      # Esto arma el paquete completo, con las mismas verificaciones que antes de un
+      # release: config de producción, version.txt contra el csproj, y los archivos que
+      # `instalar.bat` exige.
+      - name: Armar el paquete (compila el SDK real y lo verifica)
+        run: pwsh scripts/publicar.ps1 -SinDriver
+
+      # Queda descargable desde la corrida. Publicar un release pasa a ser: bajar esto,
+      # meterle el driver y subirlo — en vez de compilar y empaquetar a mano.
+      #
+      # ⚠️ Este artefacto va SIN el driver del SDK (es un binario de ZKTeco que no está en
+      # el repo). NO sirve para instalar en un gimnasio tal cual: ver scripts/publicar.ps1.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HuellaAgent-Setup-sin-driver
+          path: publish/HuellaAgent-Setup.zip
+          retention-days: 30
