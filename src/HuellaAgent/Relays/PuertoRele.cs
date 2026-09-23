@@ -48,16 +48,35 @@ public static class PuertoRele
     public const string VidCh340 = "VID_1A86";
 
     /// <summary>
-    /// Elige el puerto. <paramref name="configurado"/> gana siempre: si alguien se tomó el
-    /// trabajo de escribirlo, no se lo pisa con una corazonada.
+    /// Elige el puerto. Lo que alguien escribió a mano manda, pero SÓLO si ese puerto todavía
+    /// existe: obedecer un dato que ya no apunta a nada no es respetar una decisión, es
+    /// repetir un error. Ver el comentario de adentro.
     /// </summary>
     public static PuertoElegido Elegir(string? configurado, Func<string[]>? puertos = null, Func<bool>? hayCh340 = null)
     {
-        if (!string.IsNullOrWhiteSpace(configurado))
-            return new PuertoElegido(configurado.Trim(), OrigenDelPuerto.Configurado, "puesto a mano en la configuración");
-
         var lista = (puertos ?? SerialPort.GetPortNames)().Distinct().OrderBy(p => p).ToArray();
         var ch340 = (hayCh340 ?? HayCh340)();
+
+        var aMano = configurado?.Trim();
+        if (!string.IsNullOrWhiteSpace(aMano))
+        {
+            // Lo escrito a mano gana, PERO solo si ese puerto existe.
+            //
+            // Visto en campo el 23-sep: Windows le cambia el numero al adaptador cada vez
+            // que se lo reenchufa. Una PC configurada con COM3 volvio como COM4 y el
+            // torniquete dejo de abrir, mientras la deteccion —que lo habria encontrado al
+            // instante— quedaba bloqueada justamente por ese valor viejo.
+            //
+            // "Respetar lo que alguien configuro" no puede significar obedecer un dato que
+            // ya no apunta a nada. Si el puerto esta, manda; si no esta, se detecta y queda
+            // dicho en el motivo para que nadie lo persiga.
+            if (lista.Contains(aMano, StringComparer.OrdinalIgnoreCase))
+                return new PuertoElegido(aMano, OrigenDelPuerto.Configurado, "puesto a mano en la configuración");
+
+            if (lista.Length == 1)
+                return new PuertoElegido(lista[0], ch340 ? OrigenDelPuerto.Detectado : OrigenDelPuerto.Unico,
+                    $"{aMano} ya no existe (Windows le cambia el numero al reenchufarlo); se detecto {lista[0]}");
+        }
 
         if (lista.Length == 0)
             return new PuertoElegido(null, OrigenDelPuerto.Ninguno,

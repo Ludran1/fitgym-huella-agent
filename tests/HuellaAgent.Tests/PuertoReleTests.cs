@@ -19,16 +19,48 @@ public class PuertoReleTests
         PuertoRele.Elegir(configurado, () => puertos, () => ch340);
 
     /// <summary>
-    /// Lo escrito a mano gana SIEMPRE. Si alguien se tomó el trabajo, no se lo pisa con una
-    /// corazonada — y es la salida para el gimnasio donde la detección no alcance.
+    /// Lo escrito a mano gana, y es la salida para el gimnasio donde la detección no alcance
+    /// (varios puertos serie). Pero tiene que EXISTIR — ver el test de abajo.
     /// </summary>
     [Fact]
     public void Lo_configurado_a_mano_le_gana_a_la_deteccion()
     {
-        var r = Elegir("COM7", new[] { "COM3", "COM4" }, ch340: true);
+        var r = Elegir("COM7", new[] { "COM3", "COM4", "COM7" }, ch340: true);
 
         Assert.Equal("COM7", r.Port);
         Assert.Equal(OrigenDelPuerto.Configurado, r.Origen);
+    }
+
+    /// <summary>
+    /// EL caso de campo del 23-sep. Windows le cambia el numero al adaptador cada vez que se
+    /// lo reenchufa: una PC configurada con COM3 volvio como COM4 y el torniquete dejo de
+    /// abrir. La deteccion lo habria encontrado al instante, pero quedaba bloqueada
+    /// justamente por ese valor viejo.
+    ///
+    /// "Respetar lo que alguien configuro" no puede significar obedecer un dato que ya no
+    /// apunta a nada.
+    /// </summary>
+    [Fact]
+    public void Un_puerto_configurado_que_ya_no_existe_no_bloquea_la_deteccion()
+    {
+        var r = Elegir("COM3", new[] { "COM4" }, ch340: true);
+
+        Assert.Equal("COM4", r.Port);
+        Assert.Equal(OrigenDelPuerto.Detectado, r.Origen);
+        Assert.Contains("COM3", r.Motivo);   // queda dicho, para que nadie lo persiga
+    }
+
+    /// <summary>
+    /// Pero con VARIOS puertos y el configurado ausente, sigue sin adivinar: ahi el dato a
+    /// mano era justamente lo que desempataba, y perderlo no habilita a elegir al azar.
+    /// </summary>
+    [Fact]
+    public void Un_configurado_ausente_con_varios_puertos_sigue_sin_adivinar()
+    {
+        var r = Elegir("COM3", new[] { "COM4", "COM5" }, ch340: true);
+
+        Assert.Null(r.Port);
+        Assert.Equal(OrigenDelPuerto.Ninguno, r.Origen);
     }
 
     /// <summary>El caso normal de una PC de recepción: un relé, un puerto.</summary>
