@@ -205,6 +205,18 @@ public sealed class HuellaRpc
             var j = await resp.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: cts.Token);
             if (!j.TryGetProperty("ok", out var ok) || !ok.GetBoolean()) return null;
 
+            // El gimnasio TODAVIA no configuro nada. Devolver null —y no los defaults— es
+            // lo unico que impide pisarle a esta PC lo que ya tenia en appsettings.json.
+            //
+            // Encontrado el 23-sep probando en vivo: una PC con AutoDecide=true se quedo
+            // sin puerta automatica en el primer latido, porque la RPC mandaba los valores
+            // por defecto y el agente no podia distinguir "decidieron que no" de "todavia
+            // no decidieron". Es el peor error posible para esto: no falla, APAGA.
+            //
+            // Un servidor viejo no manda ese campo y cae por el mismo camino: el agente
+            // se queda con su archivo, que es exactamente como venia.
+            if (!Bool(j, "configurado")) return null;
+
             return new ConfigGym(
                 AbreSinNavegador: Bool(j, "abre_sin_navegador"),
                 TieneTorniquete:  Bool(j, "tiene_torniquete"),

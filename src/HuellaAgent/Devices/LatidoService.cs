@@ -89,7 +89,9 @@ public sealed class LatidoService : BackgroundService
         // desde el panel y el agente se entera solo, sin que nadie vuelva a esa PC.
         var config = await _rpc.ConfigDelGimnasioAsync(ct);
         if (config is not null) _gym.AplicarDelServidor(config);
-        // Si vino null NO se toca nada: el agente se queda con lo último que sabía.
+        // null = no se pudo preguntar, o el gimnasio todavía no configuró nada. En los dos
+        // casos NO se toca nada: el agente se queda con lo último que sabía. Ni un corte de
+        // internet ni una tabla vacía pueden apagarle la puerta a un gimnasio.
 
         // ── 2. Contar cómo estamos ───────────────────────────────────────────────
         var vigente = _gym.Actual;
