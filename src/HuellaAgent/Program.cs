@@ -78,6 +78,14 @@ builder.Services.AddSingleton<IRelay>(sp =>
     RelayFactory.Create(sp.GetRequiredService<AgentConfig>(), sp.GetRequiredService<ILoggerFactory>()));
 builder.Services.AddSingleton<HuellaRpc>();
 
+// La configuracion VIGENTE del gimnasio. Arranca desde appsettings.json y la pisa el
+// servidor cuando contesta (huella_config). Ver ConfigDelGimnasio.
+builder.Services.AddSingleton<ConfigDelGimnasio>();
+
+// El latido: le cuenta al servidor como esta este lector y se baja la config del gimnasio.
+// Va SEPARADO del portero a proposito — no puede tocar el lector ni demorar una apertura.
+builder.Services.AddHostedService<LatidoService>();
+
 try
 {
     var app = builder.Build();

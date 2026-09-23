@@ -180,6 +180,67 @@ public sealed class HuellaRpc
         return new TemplatesResult(payload.tenant_id, list);
     }
 
+    /// <summary>
+    /// huella_config(token) -> la configuracion DEL GIMNASIO.
+    ///
+    /// null = no se pudo preguntar (sin internet, sin vinculo, o una base sin la migracion
+    /// del 23-sep). Quien llama tiene que quedarse con lo que ya sabia: un corte de red no
+    /// puede apagarle la puerta a un gimnasio.
+    /// </summary>
+    public async Task<ConfigGym?> ConfigDelGimnasioAsync(CancellationToken ct)
+    {
+        var c = Creds();
+        if (c is null) return null;
+        try
+        {
+            using var cts = ConTecho(TechoVeredicto, ct);
+            var resp = await _http.SendAsync(Req(c, "huella_config", new { p_token = c.Token }), cts.Token);
+            if (!resp.IsSuccessStatusCode)
+            {
+                // Una base sin la migracion contesta 404: no es un error que valga la pena
+                // gritar en cada vuelta, el agente sigue con su appsettings.json.
+                _log.LogDebug("huella_config no disponible: {S}", resp.StatusCode);
+                return null;
+            }
+            var j = await resp.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: cts.Token);
+            if (!j.TryGetProperty("ok", out var ok) || !ok.GetBoolean()) return null;
+
+            return new ConfigGym(
+                AbreSinNavegador: Bool(j, "abre_sin_navegador"),
+                TieneTorniquete:  Bool(j, "tiene_torniquete"),
+                PulsoMs:          Int(j, "pulso_ms", 700),
+                Umbral:           Int(j, "umbral", 300));
+        }
+        catch (Exception ex)
+        {
+            _log.LogDebug("huella_config fallo: {M}", ex.Message);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// lector_latido(token, maquina, datos): le cuenta al servidor como esta este lector.
+    ///
+    /// Es fire-and-forget: devuelve si salio bien solo para el log. Nada del agente puede
+    /// depender de esto — el latido es para MIRAR, no para funcionar.
+    /// </summary>
+    public async Task<bool> LatidoAsync(string maquina, object datos, CancellationToken ct)
+    {
+        var c = Creds();
+        if (c is null) return false;
+        try
+        {
+            using var cts = ConTecho(TechoVeredicto, ct);
+            var resp = await _http.SendAsync(
+                Req(c, "lector_latido", new { p_token = c.Token, p_maquina = maquina, p_datos = datos }), cts.Token);
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    private static int Int(JsonElement j, string k, int porDefecto) =>
+        j.TryGetProperty(k, out var v) && v.TryGetInt32(out var n) ? n : porDefecto;
+
     /// <summary>Valida credenciales nuevas (pairing) con kiosk_init: confirma el token + devuelve gym.</summary>
     public async Task<(bool ok, string? tenantId, string? gym)> ValidateAsync(DurableCreds c, CancellationToken ct)
     {

@@ -29,7 +29,8 @@ public static class FingerprintEndpoints
     /// aproximaba mirando si /health dejaba de responder: si el reinicio duraba menos que su
     /// ventana de deteccion, no se enteraba. Con esto lo sabe con certeza.
     /// </summary>
-    private static readonly string BootId = Guid.NewGuid().ToString("N")[..12];
+    /// <summary>Publico porque el latido tambien lo reporta: es el mismo arranque.</summary>
+    public static readonly string BootId = Guid.NewGuid().ToString("N")[..12];
 
     public static void Map(WebApplication app)
     {
@@ -39,12 +40,15 @@ public static class FingerprintEndpoints
         // a ir hasta el gym: ¿hay lector de verdad o simulado? ¿cual? ¿a que gym esta
         // vinculado? ¿leyo algo alguna vez? ¿que fue lo ultimo que fallo? ¿se reinicio?
         app.MapGet("/health", async (IFingerprintDevice device, ITemplateStore store, HuellaRpc rpc,
-                                     FingerprintScanner scanner, PairingStore pairing, IRelay relay, AgentConfig cfg) =>
+                                     FingerprintScanner scanner, PairingStore pairing, IRelay relay,
+                                     AgentConfig cfg, ConfigDelGimnasio gym) =>
         {
             var vinculo = pairing.Load();
+            // Lo que vale AHORA: puede venir del servidor (huella_config) o del archivo.
+            var vigente = gym.Actual;
             // Reintenta abrir el rele (con su propio freno): si lo enchufaron con el agente
             // corriendo, el chip de la app se entera solo, sin tener que abrir la puerta.
-            var releOk = cfg.TurnstileEnabled && relay.TryConnect();
+            var releOk = vigente.TieneTorniquete && relay.TryConnect();
             return TypedResults.Json(new
             {
                 ok = true,
@@ -63,10 +67,15 @@ public static class FingerprintEndpoints
                 // QUIÉN decide y abre. "agente" = el portero autónomo está activo y el panel
                 // tiene que dejar de pedir identify (si no, se roban el dedo y la puerta
                 // abre dos veces). "navegador" = como siempre.
-                decide = cfg.AutoDecide && scanner.Enabled ? "agente" : "navegador",
+                decide = vigente.AbreSinNavegador && scanner.Enabled ? "agente" : "navegador",
                 // Con que exigencia esta corriendo ESTE gym (escala 0-1000). Sin esto no
                 // habia forma de saber, sin entrar a la PC, si el umbral quedo calibrado.
-                threshold = cfg.IdentifyThreshold,
+                threshold = vigente.Umbral,
+                // De donde salio la configuracion de arriba: "archivo" mientras el servidor
+                // no haya contestado nunca, "servidor" despues. Sin esto, al diagnosticar una
+                // instalacion no hay forma de saber si el agente ya se bajo lo del gimnasio
+                // o sigue con lo que trajo el ZIP.
+                config_origen = gym.Origen,
                 // Cambia en cada arranque: le dice al navegador que el agente se reinicio,
                 // sin tener que adivinarlo por un /health que dejo de responder.
                 boot_id = BootId,
@@ -75,8 +84,8 @@ public static class FingerprintEndpoints
                 last_error = device.LastError,
                 // "off" = este gym no tiene torniquete · "ready" = el rele responde ·
                 // "error" = esta configurado pero no se puede abrir (con el motivo al lado).
-                turnstile = !cfg.TurnstileEnabled ? "off" : releOk ? "ready" : "error",
-                turnstile_error = cfg.TurnstileEnabled ? relay.LastError : null,
+                turnstile = !vigente.TieneTorniquete ? "off" : releOk ? "ready" : "error",
+                turnstile_error = vigente.TieneTorniquete ? relay.LastError : null,
                 version = Version,
             });
         });

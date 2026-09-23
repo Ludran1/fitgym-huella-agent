@@ -104,6 +104,17 @@ public sealed class AgentConfig
     /// </summary>
     public int EnrollMinScore { get; init; } = 300;
 
+    /// <summary>
+    /// Cada cuantos minutos el agente le cuenta al servidor como esta, y se baja la
+    /// configuracion del gimnasio. 0 o menos lo apaga.
+    ///
+    /// Cinco minutos es barato al lado de lo que ya se hace: el panel del dueno pide
+    /// /health cada cinco SEGUNDOS mientras esta abierto. Y el valor no esta en la
+    /// frecuencia sino en notar que un gimnasio DEJO de reportar, asi que ir mas seguido no
+    /// mejoraria nada.
+    /// </summary>
+    public int LatidoMinutos { get; init; } = 5;
+
     // -- Portero autonomo (v1.2) --------------------------------------------------
 
     /// <summary>

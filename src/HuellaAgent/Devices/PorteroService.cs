@@ -32,6 +32,7 @@ public sealed class PorteroService : BackgroundService
     private readonly HuellaRpc _rpc;
     private readonly IRelay _relay;
     private readonly AgentConfig _cfg;
+    private readonly ConfigDelGimnasio _gym;
     private readonly ILogger<PorteroService> _log;
 
     // Anti-rebote: el mismo dedo apoyado no vuelve a pedir veredicto hasta pasada la
@@ -40,7 +41,8 @@ public sealed class PorteroService : BackgroundService
     private DateTime _ultimaVez = DateTime.MinValue;
 
     public PorteroService(FingerprintScanner scanner, IFingerprintDevice device, ITemplateStore store,
-                          HuellaRpc rpc, IRelay relay, Bocina bocina, AgentConfig cfg, ILogger<PorteroService> log)
+                          HuellaRpc rpc, IRelay relay, Bocina bocina, AgentConfig cfg,
+                          ConfigDelGimnasio gym, ILogger<PorteroService> log)
     {
         _scanner = scanner;
         _bocina = bocina;
@@ -49,16 +51,15 @@ public sealed class PorteroService : BackgroundService
         _rpc = rpc;
         _relay = relay;
         _cfg = cfg;
+        _gym = gym;
         _log = log;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (!_cfg.AutoDecide)
-        {
-            _log.LogInformation("Portero DESACTIVADO (Agent:AutoDecide=false): decide el navegador, como hasta ahora");
-            return;
-        }
+        // El gate ya NO es de arranque: quien decide vive en `ConfigDelGimnasio`, y eso
+        // puede cambiar desde el panel mientras el agente corre. Salir con `return` aca
+        // dejaria al portero muerto hasta el proximo inicio de sesion.
         if (!_scanner.Enabled)
         {
             _log.LogWarning("Portero: necesita el scanner continuo (Agent:ContinuousScan=true). No arranca.");
@@ -72,6 +73,14 @@ public sealed class PorteroService : BackgroundService
         {
             try
             {
+                // Se pregunta en CADA vuelta: el dueno puede prenderlo o apagarlo desde el
+                // panel y tiene que tomar efecto sin reiniciar nada.
+                if (!_gym.Actual.AbreSinNavegador)
+                {
+                    await Task.Delay(5000, stoppingToken);
+                    continue;
+                }
+
                 var tenant = _rpc.TenantId;
                 if (tenant is null)
                 {
@@ -119,10 +128,10 @@ public sealed class PorteroService : BackgroundService
                     veredicto.Nombre, veredicto.Tipo, veredicto.YaHoy ? ", ya habia entrado hoy" : "", match.Score);
                 _bocina.Ok();
 
-                if (!_cfg.TurnstileEnabled) continue;   // gym sin torniquete: solo se registra
+                if (!_gym.Actual.TieneTorniquete) continue;   // gym sin torniquete: solo se registra
                 try
                 {
-                    await _relay.PulseAsync(_cfg.RelayPulseMs, stoppingToken);
+                    await _relay.PulseAsync(_gym.Actual.PulsoMs, stoppingToken);
                 }
                 catch (Exception ex)
                 {
