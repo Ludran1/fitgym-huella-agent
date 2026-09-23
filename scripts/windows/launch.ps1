@@ -87,8 +87,31 @@ try {
         Copy-Item $newExe $exe -Force
         if (Test-Path $newVer) { Copy-Item $newVer $vfile -Force }
         else { Set-Content -Path $vfile -Value $latest.ToString() }
+
+        # Los SCRIPTS tambien, no solo el exe.
+        #
+        # Hasta la v1.2.0 esto copiaba el exe y nada mas, asi que cualquier mejora en el
+        # instalador, en el vigilante o en este mismo launcher exigia ir hasta la PC del
+        # gimnasio. Con catorce gimnasios eso no escala: el auto-update servia para el
+        # programa y no para todo lo demas que lo rodea.
+        #
+        # Se copia TODO menos dos cosas:
+        #   · appsettings.json  -> es la configuracion de ESE gimnasio. Pisarla seria
+        #                          borrarle el puerto del rele o el torniquete a quien lo
+        #                          tenga configurado a mano.
+        #   · setup-driver.exe  -> 13 MB que ya estan instalados. No hace falta moverlos.
+        #
+        # Sobrescribir launch.ps1 mientras corre es seguro: PowerShell ya lo leyo entero a
+        # memoria. La version nueva empieza a valer en el proximo inicio de sesion.
+        $refrescados = 0
+        Get-ChildItem $tmpDir -File | Where-Object {
+          $_.Name -notin @("HuellaAgent.exe", "version.txt", "appsettings.json", "setup-driver.exe")
+        } | ForEach-Object {
+          try { Copy-Item $_.FullName (Join-Path $dir $_.Name) -Force; $refrescados++ } catch { }
+        }
+
         $actualizadoA = $latest
-        Anotar "actualizado de $local a $latest"
+        Anotar "actualizado de $local a $latest ($refrescados scripts refrescados)"
       }
       Remove-Item $tmpZip -Force -ErrorAction SilentlyContinue
       Remove-Item $tmpDir -Recurse -Force -ErrorAction SilentlyContinue
