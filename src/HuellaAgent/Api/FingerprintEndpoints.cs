@@ -102,7 +102,7 @@ public static class FingerprintEndpoints
         // ── /api/fingerprint/* (api-key opcional) ───────────────────────────────────
         var api = app.MapGroup("/api/fingerprint").AddEndpointFilter(ApiKeyFilter);
 
-        // POST capture {timeout} → {template, quality} · 408 sin dedo
+        // POST capture {timeout} → {template, mismo_apoyo} · 408 sin dedo
         api.MapPost("/capture", async (CaptureReq? body, IFingerprintDevice device, FingerprintScanner scanner, AgentConfig cfg, CancellationToken ct) =>
         {
             try
@@ -111,9 +111,32 @@ public static class FingerprintEndpoints
                 // compiten por el mismo dedo (el loop se lo roba y /capture se cuelga
                 // hasta el timeout) y ademas un dedo del enrolado terminaria marcando
                 // asistencia por /identify.
+                // Se pregunta ANTES de suspender: SuspendAsync marca "enrolando", asi que
+                // preguntarlo despues daria true SIEMPRE, incluida la primera captura — y
+                // entonces se le pediria levantar el dedo a alguien que recien lo apoyo.
+                var dentroDeUnEnrolado = scanner.EnrolandoAhora;
                 using var lectorTomado = await scanner.SuspendAsync(ct);
+
+                // ¿Es una captura del MISMO apoyo que la anterior?
+                //
+                // Las tres capturas se fusionan (DBMerge). Si salen del mismo apoyo, sin que
+                // el socio levante el dedo, el template queda angosto y esa persona lee mal
+                // TODOS los dias — y eso ya no se arregla. El SDK no se queja: devuelve lo
+                // que haya sobre el vidrio en el instante en que se le pregunta.
+                //
+                // Solo se exige el levante DENTRO de un enrolado en curso. Para la primera
+                // captura da igual con que apoyo se arranca, y obligar a levantar ahi seria
+                // pedirle algo raro a alguien que acaba de apoyar el dedo bien.
+                var mismoApoyo = false;
+                if (dentroDeUnEnrolado && !await EsperarQueSeLevanteAsync(device, cfg.EsperaLevanteMs, ct))
+                    mismoApoyo = true;   // nunca lo levanto: se captura igual, pero avisado
+
                 var r = await device.CaptureAsync(body?.Timeout ?? 15, ct);
-                return Results.Json(new { template = r.Template, quality = r.Quality });
+
+                // Se captura igual y se deja decidir al que llama, en vez de tirar un error.
+                // Fallar aca dejaria el enrolado trabado con un mensaje que el mostrador no
+                // puede accionar; con el aviso, el frontend descarta y pide de nuevo.
+                return Results.Json(new { template = r.Template, mismo_apoyo = mismoApoyo });
             }
             catch (NoFingerException) { return Results.Json(new { detail = "timeout sin dedo" }, statusCode: 408); }
             catch (DeviceUnavailableException ex) { return Results.Json(new { detail = ex.Message }, statusCode: 503); }
@@ -161,16 +184,23 @@ public static class FingerprintEndpoints
             // el agente IGUAL respondia ok:true → la huella quedaba SOLO en el dispositivo
             // (se pierde al reiniciar, no sincroniza, no anda en otra PC). El frontend
             // mostraba "exito" pero la tabla huellas seguia vacia. Ahora se reporta el hecho.
+            // La calidad viaja tambien cuando SALE BIEN, no solo en el rechazo.
+            //
+            // El agente ya la calculaba y la dejaba en el log; el frontend solo la veia si
+            // el enrolado fallaba. Y el numero tiene DOS lados malos: por abajo son dedos
+            // distintos (eso ya se rechaza con EnrollMinScore), y por arriba, saturado, son
+            // las tres capturas del mismo apoyo — que pasan sin quejarse y dan una huella
+            // que falla todos los dias. Sin el numero a la vista, ese caso es invisible.
             if (!rpc.Enabled)
                 // Sin vincular: guardado local-only. durable=false → el frontend avisa
                 // (en un gym la huella DEBE persistir en la nube; no es exito real).
-                return Results.Json(new { ok = true, uid, durable = false });
+                return Results.Json(new { ok = true, uid, durable = false, calidad = peor, pares });
 
             var durableUid = await rpc.EnrollAsync(body.ClienteId, merged, ct);
             if (durableUid is null)
                 return Results.Json(new { ok = false, detail = "Guardado en el lector pero NO en la nube: el lector esta vinculado a otro gym o el cliente no pertenece a este gym. Re-vincula el lector (Configuracion -> Lector de huella) y volve a enrolar." }, statusCode: 409);
 
-            return Results.Json(new { ok = true, uid, durable = true });
+            return Results.Json(new { ok = true, uid, durable = true, calidad = peor, pares });
         });
 
         // POST identify {tenant_id} → 200 {ok, cliente_id, score} · 404 sin match · 408 sin dedo
@@ -283,6 +313,32 @@ public static class FingerprintEndpoints
         }
         log.LogInformation("identify: match uid={Uid} score={Score} (umbral {Umbral}, {Cuantas} huellas cargadas)",
             match.Uid, match.Score, cfg.IdentifyThreshold, db.Count);
+    }
+
+    /// <summary>
+    /// Espera a que el vidrio quede libre. true = se levanto; false = se acabo la paciencia.
+    ///
+    /// `TryCapture()` devuelve null cuando no hay dedo, asi que el agente SABE si esta
+    /// apoyado — no hace falta adivinarlo por tiempos, que es lo unico que puede hacer el
+    /// navegador (hoy descarta una captura que vuelve en menos de 500 ms).
+    /// </summary>
+    private static async Task<bool> EsperarQueSeLevanteAsync(IFingerprintDevice device, int msMax, CancellationToken ct)
+    {
+        var hasta = DateTime.UtcNow.AddMilliseconds(Math.Max(0, msMax));
+        while (DateTime.UtcNow < hasta)
+        {
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                if (device.TryCapture() is null) return true;
+            }
+            catch (DeviceUnavailableException)
+            {
+                return true;   // el lector se cayo: que lo reporte CaptureAsync, no esto
+            }
+            await Task.Delay(40, ct);
+        }
+        return false;
     }
 
     /// <summary>Traduce el match del SDK al contrato HTTP: 200 con cliente_id, o 404.</summary>

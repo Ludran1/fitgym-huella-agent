@@ -31,8 +31,13 @@ public class ContractTests
         Assert.Equal(0, body.GetProperty("templates_loaded").GetInt32());
     }
 
+    /// <summary>
+    /// /capture devuelve el template y NADA MAS. Tenia un campo `quality` que no existia:
+    /// ZkfpDevice devolvia 100 fijo y MockDevice 85 fijo, y nadie lo leia para decidir. Un
+    /// numero que dice "calidad 100" tambien en un enrolado malo invita a confiar en el.
+    /// </summary>
     [Fact]
-    public async Task Capture_returns_template_and_quality()
+    public async Task Capture_devuelve_el_template_y_ya_no_un_quality_inventado()
     {
         using var f = new AgentFactory();
         var client = f.CreateClient();
@@ -41,7 +46,9 @@ public class ContractTests
         Assert.Equal(HttpStatusCode.OK, res.StatusCode);
         var body = await ReadJson(res);
         Assert.Equal("CAP-AAA", body.GetProperty("template").GetString());
-        Assert.Equal(90, body.GetProperty("quality").GetInt32());
+        Assert.False(body.TryGetProperty("quality", out _), "el quality inventado volvio al contrato");
+        // La primera captura no exige levantar el dedo: con que apoyo se arranca da igual.
+        Assert.False(body.GetProperty("mismo_apoyo").GetBoolean());
     }
 
     [Fact]

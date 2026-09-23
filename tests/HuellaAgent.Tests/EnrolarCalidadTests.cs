@@ -46,4 +46,29 @@ public class EnrolarCalidadTests
         var health = await http.GetFromJsonAsync<System.Text.Json.JsonElement>("/health");
         Assert.Equal(1, health.GetProperty("templates_loaded").GetInt32());
     }
+
+    /// <summary>
+    /// El puntaje viaja tambien cuando el enrolado SALE BIEN.
+    ///
+    /// El agente ya lo calculaba y lo dejaba en el log; el frontend solo lo veia si fallaba.
+    /// Y el numero tiene dos lados malos: por abajo son dedos distintos —eso ya se rechaza—
+    /// y por arriba, saturado, son las tres capturas del MISMO apoyo, que pasan sin quejarse
+    /// y dan una huella que falla todos los dias. Sin el numero a la vista es invisible.
+    /// </summary>
+    [Fact]
+    public async Task El_enrolado_que_sale_bien_igual_dice_con_que_calidad()
+    {
+        await using var app = new AgentFactory();
+        app.Device.MatchScore = 780;
+        var http = app.CreateClient();
+
+        var r = await http.PostAsJsonAsync("/api/fingerprint/enroll", Cuerpo());
+        Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+
+        var body = await r.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Equal(780, body.GetProperty("calidad").GetInt32());
+        // Los tres 1:1 por separado: dos altos y uno bajo no es lo mismo que tres medios,
+        // y el promedio lo taparia.
+        Assert.Equal(3, body.GetProperty("pares").GetArrayLength());
+    }
 }

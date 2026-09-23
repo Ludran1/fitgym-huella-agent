@@ -51,7 +51,7 @@ public sealed class MockDevice : IFingerprintDevice
     private static CaptureResult NewCapture()
     {
         var raw = Encoding.UTF8.GetBytes($"MOCK-CAP::{Guid.NewGuid():N}");
-        return new CaptureResult(Convert.ToBase64String(raw), Quality: 85);
+        return new CaptureResult(Convert.ToBase64String(raw));
     }
 
     public string Merge(string template1, string template2, string template3)

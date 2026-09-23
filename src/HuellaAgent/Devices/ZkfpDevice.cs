@@ -133,7 +133,7 @@ public sealed class ZkfpDevice : IFingerprintDevice, IDisposable
             {
                 _ultimoChequeo = DateTime.UtcNow;
                 LastError = null;
-                return new CaptureResult(zkfp2.BlobToBase64(template, cb), Quality: 100);
+                return new CaptureResult(zkfp2.BlobToBase64(template, cb));
             }
 
             // Cualquier rc que NO sea "sin dedo" es el lector quejandose: que lo recicle

@@ -2,8 +2,18 @@ using HuellaAgent.Storage;
 
 namespace HuellaAgent.Devices;
 
-/// <summary>Captura cruda de un dedo: template base64 + calidad (0-100).</summary>
-public sealed record CaptureResult(string Template, int Quality);
+/// <summary>
+/// Captura cruda de un dedo: el template en base64, y nada mas.
+///
+/// Tenia un campo `Quality` que NO existia: ZkfpDevice devolvia 100 fijo y MockDevice 85
+/// fijo. Viajaba hasta la respuesta HTTP de /capture y nadie lo leia para decidir nada —
+/// el unico consumidor era el JSON. Un numero inventado que dice "calidad 100" tambien en
+/// un enrolado malo es peor que no tener ninguno: invita a confiar en el.
+///
+/// La calidad que SI existe es la del enrolado (1:1 entre las tres capturas, `Match`), y
+/// esa la devuelve /enroll.
+/// </summary>
+public sealed record CaptureResult(string Template);
 
 /// <summary>Match de identify: uid interno del SDK + score de similitud.</summary>
 public sealed record IdentifyMatch(int Uid, int Score);

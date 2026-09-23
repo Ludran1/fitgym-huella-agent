@@ -38,7 +38,7 @@ public sealed class FakeDevice : IFingerprintDevice
     /// <summary>Si esta en true, TryCapture tira DeviceUnavailableException.</summary>
     public bool TryCaptureFalla { get; set; }
 
-    public CaptureResult Capture { get; set; } = new("CAP-AAA", 90);
+    public CaptureResult Capture { get; set; } = new("CAP-AAA");
     public bool CaptureNoFinger { get; set; }
 
     public bool IdentifyNoFinger { get; set; }

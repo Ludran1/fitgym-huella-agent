@@ -3,7 +3,7 @@ using HuellaAgent.Config;
 namespace HuellaAgent.Devices;
 
 /// <summary>Un dedo leido por el scanner, con el instante en que se leyo.</summary>
-public sealed record ScanProbe(string Template, int Quality, DateTime AtUtc);
+public sealed record ScanProbe(string Template, DateTime AtUtc);
 
 /// <summary>
 /// Mantiene el sensor leyendo SIEMPRE, en un loop de fondo, y bufferea el ultimo dedo
@@ -129,7 +129,7 @@ public sealed class FingerprintScanner : BackgroundService
                 }
 
                 UltimaLecturaUtc = DateTime.UtcNow;
-                Publish(new ScanProbe(cap.Template, cap.Quality, DateTime.UtcNow));
+                Publish(new ScanProbe(cap.Template, DateTime.UtcNow));
 
                 // Debounce del dedo APOYADO: sin esto, mientras no lo levanta, el loop
                 // republica el mismo dedo cada 40ms y machaca el buffer.

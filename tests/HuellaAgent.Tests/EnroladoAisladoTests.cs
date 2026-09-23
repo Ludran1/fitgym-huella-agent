@@ -2,6 +2,7 @@ using HuellaAgent.Config;
 using HuellaAgent.Devices;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Net.Http.Json;
 using Xunit;
 
 namespace HuellaAgent.Tests;
@@ -136,6 +137,57 @@ public class EnroladoAisladoTests
             Assert.Null(await scanner.WaitForProbeAsync(1, CancellationToken.None));
         }
         finally { await scanner.StopAsync(CancellationToken.None); }
+    }
+
+    /// <summary>
+    /// HU-9 · El agente SABE si el dedo sigue apoyado — `TryCapture()` devuelve null cuando
+    /// el vidrio esta libre. El navegador no: solo puede adivinarlo por tiempos (descarta una
+    /// captura que vuelve en menos de 500 ms).
+    ///
+    /// Con el dedo que nunca se levanta, la captura sale igual —trabar el enrolado con un
+    /// error que el mostrador no puede accionar seria peor— pero AVISADA, y el frontend la
+    /// descarta con certeza en vez de con un cronometro.
+    /// </summary>
+    [Fact]
+    public async Task Una_captura_del_mismo_apoyo_sale_avisada()
+    {
+        await using var app = new AgentFactory();
+        var http = app.CreateClient();
+
+        // Primera captura: no exige levantar nada, con que apoyo se arranca da igual.
+        var uno = await http.PostAsJsonAsync("/api/fingerprint/capture", new { timeout = 1 });
+        var cuerpoUno = await uno.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.False(cuerpoUno.GetProperty("mismo_apoyo").GetBoolean());
+
+        // Segunda, con el dedo TODAVIA sobre el vidrio (TryCapture nunca devuelve null).
+        var dos = await http.PostAsJsonAsync("/api/fingerprint/capture", new { timeout = 1 });
+        var cuerpoDos = await dos.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+
+        Assert.Equal(System.Net.HttpStatusCode.OK, dos.StatusCode);
+        Assert.True(cuerpoDos.GetProperty("mismo_apoyo").GetBoolean(),
+            "las tres capturas saldrian del mismo apoyo y la huella naceria angosta");
+    }
+
+    /// <summary>
+    /// Y si el socio SI levanta el dedo, la captura sale limpia. Es la otra mitad: un aviso
+    /// que salta siempre no sirve de nada.
+    /// </summary>
+    [Fact]
+    public async Task Si_levanta_el_dedo_la_captura_sale_limpia()
+    {
+        await using var app = new AgentFactory();
+        var http = app.CreateClient();
+
+        await http.PostAsJsonAsync("/api/fingerprint/capture", new { timeout = 1 });
+
+        // Levanto el dedo: TryCapture pasa a devolver null, pero CaptureAsync sigue dando
+        // el template (es el dedo que apoya de nuevo, un instante despues).
+        app.Device.IdentifyNoFinger = true;
+
+        var dos = await http.PostAsJsonAsync("/api/fingerprint/capture", new { timeout = 1 });
+        var cuerpo = await dos.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+
+        Assert.False(cuerpo.GetProperty("mismo_apoyo").GetBoolean());
     }
 
     /// <summary>

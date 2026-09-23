@@ -62,6 +62,16 @@ public sealed class AgentConfig
     public int SameFingerDebounceMs { get; init; } = 400;
 
     /// <summary>
+    /// Cuanto se espera, como maximo, a que el socio levante el dedo entre una captura del
+    /// enrolado y la siguiente.
+    ///
+    /// Pasado eso se captura igual y se avisa (`mismo_apoyo`), en vez de fallar: trabar el
+    /// enrolado con un error que el mostrador no puede accionar seria peor que dejarlo
+    /// decidir. Tres segundos alcanzan de sobra para levantar un dedo.
+    /// </summary>
+    public int EsperaLevanteMs { get; init; } = 3000;
+
+    /// <summary>
     /// Cuanto sigue "en enrolado" el lector despues de cada captura.
     ///
     /// Un enrolado son TRES capturas con huecos en el medio, y en esos huecos el dedo sigue
