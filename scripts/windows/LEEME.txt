@@ -1,5 +1,5 @@
 ==========================================================
- LECTOR DE HUELLA - FitGym  (instalacion)   v1.1.0
+ LECTOR DE HUELLA - FitGym  (instalacion)   v1.2.0
 ==========================================================
 Para usar el lector de huella ZKTeco (SLK20R o ZK9500) en la PC de recepcion.
 
@@ -7,16 +7,12 @@ Para usar el lector de huella ZKTeco (SLK20R o ZK9500) en la PC de recepcion.
 INSTALAR  (1 solo paso)
 ----------------------------------------------------------
 1. Clic derecho en  instalar.bat  ->  "Ejecutar como administrador".
-   - Te abre el asistente del DRIVER: Siguiente / Finalizar.
-   - Enchufa el lector a un USB cuando te lo pida.
-   - El agente queda corriendo, arranca solo al iniciar sesion, y ademas
-     queda un VIGILANTE que lo revisa cada minuto y lo levanta si se cae.
+   Eso hace TODO: driver, agente, arranque automatico, vigilante y los
+   ajustes de energia para que Windows no apague el lector.
    (Si SmartScreen avisa: "Mas informacion" -> "Ejecutar de todas formas".)
 
-2. Verifica en el navegador:  http://localhost:8000/health
-   - "device" tiene que decir el modelo real (ej. "ZKTeco SLK20R").
-     Si dice "(sin lector)", mira "last_error": ahi dice por que.
-   - "reader" tiene que decir "connected".
+2. Al terminar TE DICE si quedo andando y, si no, que falta.
+   No hace falta que revises nada a mano.
 
 ----------------------------------------------------------
 VINCULAR con tu gimnasio
@@ -28,23 +24,27 @@ VINCULAR con tu gimnasio
    volve a vincularlo: si no, las huellas que registres NO se guardan.
 
 ----------------------------------------------------------
-QUE HAY QUE AJUSTAR EN LA PC
+LO UNICO QUE QUEDA A MANO
 ----------------------------------------------------------
-- Que la PC no se suspenda y que el USB no se apague por ahorro de energia.
-- Sesion de Windows automatica, para que arranque sola despues de un corte.
+La energia y el arranque automatico ya los deja el instalador. Faltan dos
+cosas que no se pueden automatizar:
+
+- Sesion de Windows automatica (netplwiz). Sin esto, si se corta la luz un
+  domingo el agente no arranca hasta que alguien se loguee, y el gimnasio
+  queda sin puerta. El instalador te deja los pasos al terminar.
 - Si es laptop: que cerrar la tapa NO la suspenda.
 
 ----------------------------------------------------------
 OPCIONAL: que la puerta abra SIN el navegador
 ----------------------------------------------------------
-Por defecto decide el navegador: si nadie tiene el panel abierto, la puerta
-no abre. Para que decida el agente, en appsettings.json:
+Desde la v1.2.0 esto YA NO se configura en esta PC: se prende desde el panel
+y el agente se entera solo, en pocos minutos. Lo mismo el torniquete y el
+puerto del rele, que ahora se detecta buscando el CH340.
 
-    "AutoDecide": true
+Verificalo en /health: "decide" debe decir "agente" y "config_origen" debe
+decir "servidor".
 
-Con eso el agente reconoce el dedo, le pregunta al servidor si esa persona
-puede pasar, registra la asistencia y pulsa el rele, sin navegador.
-Verificalo en /health: "decide" debe decir "agente".
+OJO: sin internet NO abre. El agente no adivina vigencias.
 
 OJO: sin internet NO abre. El agente no adivina vigencias.
 

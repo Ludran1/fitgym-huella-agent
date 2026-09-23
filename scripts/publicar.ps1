@@ -100,7 +100,7 @@ $errores = @()
 
 # instalar.bat aborta si le falta alguno de estos.
 foreach ($f in @("HuellaAgent.exe", "instalar.bat", "run-hidden.vbs", "vigilante-oculto.vbs",
-                 "ajustes-energia.bat", "appsettings.json", "version.txt", "LEEME.txt")) {
+                 "ajustes-energia.bat", "verificar.ps1", "appsettings.json", "version.txt", "LEEME.txt")) {
   if (-not (Test-Path (Join-Path $pkg $f))) { $errores += "falta $f" }
 }
 
