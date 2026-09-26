@@ -129,15 +129,7 @@ public sealed class PorteroService : BackgroundService
                 _bocina.Ok();
 
                 if (!_gym.Actual.TieneTorniquete) continue;   // gym sin torniquete: solo se registra
-                try
-                {
-                    await _relay.PulseAsync(_gym.Actual.PulsoMs, stoppingToken);
-                }
-                catch (Exception ex)
-                {
-                    // La asistencia YA quedó registrada: que la puerta falle no debe borrarla.
-                    _log.LogError(ex, "Portero: el acceso se concedio pero el rele no abrio");
-                }
+                await AbrirSinJugarseElPortero(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
             catch (Exception ex)
@@ -147,6 +139,46 @@ public sealed class PorteroService : BackgroundService
             }
         }
     }
+
+
+    /// <summary>
+    /// Abre el torniquete sin arriesgar el portero.
+    ///
+    /// EL 26-SEP UN RELE COLGADO MATO AL PORTERO. `SerialPort.Write` es bloqueante y sin
+    /// timeout no vuelve nunca; como corre en ESTE hilo, el portero se quedo trabado ahi
+    /// para siempre: dejo de mirar dedos, sin un error en el log, mientras /health seguia
+    /// diciendo `turnstile: ready`. El sintoma que llego fue "cambie el lector y no abre".
+    ///
+    /// La causa ya esta arreglada donde corresponde (UsbRelay pone WriteTimeout). Esto es
+    /// la otra mitad: que NINGUNA falla de un periferico pueda volver a matar al portero,
+    /// la haya previsto yo o no. Un hilo abandonado es infinitamente mejor que una puerta
+    /// muerta, y con el timeout puesto no deberia pasar nunca.
+    ///
+    /// Va por Task.Run a proposito: PulseAsync escribe al puerto ANTES de su primer await,
+    /// asi que llamarlo directo ya bloquea a quien lo llama y el techo no llegaria a correr.
+    /// </summary>
+    private async Task AbrirSinJugarseElPortero(CancellationToken ct)
+    {
+        var pulso = Task.Run(() => _relay.PulseAsync(_gym.Actual.PulsoMs, ct), ct);
+        var techo = Task.Delay(TechoPulso, ct);
+
+        if (await Task.WhenAny(pulso, techo) == techo)
+        {
+            _log.LogError("Portero: el rele no contesto en {Seg}s; sigo atendiendo sin el",
+                TechoPulso.TotalSeconds);
+            return;   // el pulso queda abandonado; el portero sigue vivo, que es lo que importa
+        }
+
+        try { await pulso; }
+        catch (Exception ex)
+        {
+            // La asistencia YA quedo registrada: que la puerta falle no debe borrarla.
+            _log.LogError(ex, "Portero: el acceso se concedio pero el rele no abrio");
+        }
+    }
+
+    /// <summary>Techo del pulso: de sobra para 4 bytes a 9600 baudios (~4 ms).</summary>
+    private static readonly TimeSpan TechoPulso = TimeSpan.FromSeconds(5);
 
     private bool EsRebote(string personaId)
     {
