@@ -149,4 +149,30 @@ public class PaqueteTests
         Assert.Equal(2, arranques);   // el normal y el de la vuelta atras
         Assert.Equal(arranques, script.Split("-WorkingDirectory $dir").Length - 1);
     }
+
+    /// <summary>
+    /// Los dominios desde los que el panel se sirve tienen que estar en AllowedOrigins.
+    ///
+    /// Esto es CORS, y falla de la peor manera: `/health` contesta 200, lo que falta es el
+    /// header `Access-Control-Allow-Origin`, y el navegador descarta la respuesta sin decir
+    /// por que. El panel muestra "Agente no detectado" con el lector enchufado, andando y
+    /// abriendo la puerta. Paso el 26-sep: el panel empezo a servirse desde `my.peakgym.app`
+    /// y ningun agente instalado lo tenia en la lista.
+    ///
+    /// Ampliarlo por appsettings.json arregla UNA PC. El default arregla las catorce.
+    /// </summary>
+    [Theory]
+    [InlineData("https://my.peakgym.app")]
+    [InlineData("https://peakgym.app")]
+    [InlineData("https://www.peakgym.app")]
+    [InlineData("https://app.peakgym.app")]
+    [InlineData("https://superadmin.peakgym.app")]
+    [InlineData("https://www.fitgym-app.com")]
+    [InlineData("https://fitgym-app.com")]
+    public void El_panel_puede_hablarle_al_agente_desde_sus_dominios(string origen)
+    {
+        var cfg = new AgentConfig();
+
+        Assert.Contains(origen, cfg.AllowedOrigins);
+    }
 }

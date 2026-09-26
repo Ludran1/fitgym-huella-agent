@@ -18,19 +18,34 @@ public sealed class AgentConfig
     /// api-key vacia —que es como viene— CUALQUIER pagina abierta en el navegador de esa PC
     /// podia pedirle capturas al lector. Ahora solo el panel y el dev local.
     ///
-    /// Se puede ampliar por appsettings si el panel cambia de dominio. Ojo: esto lo hace
-    /// cumplir el NAVEGADOR; un programa corriendo en la misma PC igual puede llamar al
-    /// agente, y para eso esta la api-key.
+    /// Se puede ampliar por appsettings si el panel cambia de dominio, pero eso hay que
+    /// hacerlo PC por PC: el default tiene que traer todos los dominios vivos. El 26-sep el
+    /// panel empezo a servirse tambien desde `my.peakgym.app` y NINGUN agente lo tenia, asi
+    /// que los 14 gimnasios veian "Agente no detectado" con el lector enchufado y andando.
+    /// El sintoma engania: /health contesta 200, lo que falta es el header, y el navegador
+    /// tira la respuesta sin decir por que. Si aparece un dominio nuevo, va ACA.
+    ///
+    /// Ojo: esto lo hace cumplir el NAVEGADOR; un programa corriendo en la misma PC igual
+    /// puede llamar al agente, y para eso esta la api-key.
     /// </summary>
     public string[] AllowedOrigins { get; init; } =
     {
+        // peakgym.app — dominio actual del panel (desde el 26-sep-2026)
+        "https://my.peakgym.app",
+        "https://peakgym.app",
+        "https://www.peakgym.app",
+        "https://app.peakgym.app",
+        "https://superadmin.peakgym.app",
+        // fitgym-app.com — dominio anterior, sigue sirviendo el panel
         "https://www.fitgym-app.com",
         "https://fitgym-app.com",
+        "https://app.fitgym-app.com",
+        "https://superadmin.fitgym-app.com",
+        // dev
         "http://localhost:8080",
         "http://localhost:8081",
         "http://localhost:5173",
     };
-
     /// <summary>Ventana de captura del identify, en segundos. Decidido 2026-06-14 = 3-5s.</summary>
     public int IdentifyTimeoutSeconds { get; init; } = 4;
 
