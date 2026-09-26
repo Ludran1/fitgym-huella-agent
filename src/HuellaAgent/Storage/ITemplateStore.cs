@@ -30,8 +30,27 @@ public interface ITemplateStore
     /// </summary>
     Task ReemplazarAsync(string tenantId, IReadOnlyList<StoredTemplate> templates);
 
-    /// <summary>Total de templates cargados (todos los tenants) para /health.</summary>
-    Task<int> CountAsync();
+    /// <summary>
+    /// Cuantos templates hay cargados para ESE gimnasio (null = todos los del archivo).
+    ///
+    /// Antes sumaba siempre todo el archivo. En una PC de un solo gimnasio da igual, y por
+    /// eso no se noto: el 26-sep, despues de re-vincular la PC de desarrollo de Villa
+    /// Periodista a Sede 2, /health decia 25 huellas cargadas cuando Sede 2 tiene 2. Ese
+    /// numero es el que super-admin muestra como "huellas cargadas" de cada lector.
+    /// </summary>
+    Task<int> CountAsync(string? tenantId = null);
+
+    /// <summary>
+    /// Borra del disco los templates de todo gimnasio que NO sea este. Se llama al vincular.
+    ///
+    /// `ReemplazarAsync` solo pisa la lista del tenant que recibe, asi que al mover un lector
+    /// de un gimnasio a otro las huellas del anterior se quedaban en `templates.json` para
+    /// siempre. Son datos biometricos (Ley 29733) de socios de un gimnasio que ya no es
+    /// dueno de esa computadora. El comentario del endpoint de pairing decia desde el
+    /// principio que "lo que este lector tuviera de antes no tiene por que sobrevivir": esto
+    /// es lo que faltaba para que fuera cierto.
+    /// </summary>
+    Task OlvidarOtrosAsync(string tenantId);
 
     /// <summary>
     /// Contador que sube en cada SaveAsync. El device lo usa (junto al tenant) como clave

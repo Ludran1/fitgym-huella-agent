@@ -150,4 +150,49 @@ public class SincronizacionTests : IDisposable
 
         Assert.True(store.Version > antes, "la DB del SDK no se iba a rearmar");
     }
+
+    private const string OtroGym = "33333333-3333-3333-3333-333333333333";
+
+    /// <summary>
+    /// Mover el lector de un gimnasio a otro tiene que LIMPIAR las huellas del anterior.
+    ///
+    /// `ReemplazarAsync` solo pisa la lista del tenant que recibe, asi que las del gimnasio
+    /// viejo se quedaban en `templates.json` para siempre. Son datos biometricos (Ley 29733)
+    /// de socios de un gimnasio que ya no es dueno de esa computadora, y viajan con la PC si
+    /// se vende o se reasigna. Visto de verdad el 26-sep: re-vinculada de Villa Periodista a
+    /// Sede 2, la PC seguia con las 23 huellas de Villa Periodista en el disco.
+    /// </summary>
+    [Fact]
+    public async Task Al_mover_el_lector_a_otro_gimnasio_se_van_las_huellas_del_anterior()
+    {
+        var store = Store();
+        await store.SaveAsync(Gym, "ana", "T-ANA");
+        await store.SaveAsync(Gym, "beto", "T-BETO");
+        await store.SaveAsync(OtroGym, "carla", "T-CARLA");
+
+        await store.OlvidarOtrosAsync(OtroGym);
+
+        Assert.Empty(await store.LoadAsync(Gym));
+        Assert.Single(await store.LoadAsync(OtroGym));
+    }
+
+    /// <summary>
+    /// Y el numero que ve super-admin es el del gimnasio, no el del archivo.
+    ///
+    /// `CountAsync()` sumaba siempre todos los tenants. En una PC de un solo gimnasio da
+    /// igual —por eso no se noto— pero apenas una PC pasa por dos gimnasios, el "huellas
+    /// cargadas" de cada lector miente: el 26-sep decia 25 con Sede 2, que tiene 2.
+    /// </summary>
+    [Fact]
+    public async Task Las_huellas_cargadas_son_las_de_ese_gimnasio()
+    {
+        var store = Store();
+        await store.SaveAsync(Gym, "ana", "T-ANA");
+        await store.SaveAsync(Gym, "beto", "T-BETO");
+        await store.SaveAsync(OtroGym, "carla", "T-CARLA");
+
+        Assert.Equal(2, await store.CountAsync(Gym));
+        Assert.Equal(1, await store.CountAsync(OtroGym));
+        Assert.Equal(3, await store.CountAsync());   // sin tenant, sigue siendo todo el archivo
+    }
 }

@@ -102,17 +102,33 @@ public sealed class LocalFileStore : ITemplateStore
         finally { _lock.Release(); }
     }
 
-    public async Task<int> CountAsync()
+    public async Task<int> CountAsync(string? tenantId = null)
     {
         await _lock.WaitAsync();
         try
         {
             var db = await ReadAllAsync();
-            return db.Values.Sum(l => l.Count);
+            if (tenantId is null) return db.Values.Sum(l => l.Count);
+            return db.TryGetValue(tenantId, out var lista) ? lista.Count : 0;
         }
         finally { _lock.Release(); }
     }
 
+    public async Task OlvidarOtrosAsync(string tenantId)
+    {
+        await _lock.WaitAsync();
+        try
+        {
+            var db = await ReadAllAsync();
+            var sobran = db.Keys.Where(k => k != tenantId).ToList();
+            if (sobran.Count == 0) return;
+
+            foreach (var k in sobran) db.Remove(k);
+            await WriteAllAsync(db);
+            Interlocked.Increment(ref _version);   // invalida la DB cacheada del SDK
+        }
+        finally { _lock.Release(); }
+    }
     // Devuelve el dict cacheado; la 1ra vez (o si se invalido) lo lee de disco. Corre
     // siempre bajo _lock (lo garantizan los callers), por eso no necesita sincronizacion
     // extra sobre _cache.

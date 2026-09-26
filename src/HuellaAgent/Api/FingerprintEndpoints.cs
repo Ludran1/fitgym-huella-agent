@@ -54,7 +54,7 @@ public static class FingerprintEndpoints
                 ok = true,
                 reader = device.IsConnected ? "connected" : "disconnected",
                 device = device.DeviceName,
-                templates_loaded = await store.CountAsync(),
+                templates_loaded = await store.CountAsync(vinculo?.TenantId),
                 durable = rpc.Enabled,   // true = vinculado a Supabase (pairing o appsettings)
                 // A QUE gym esta vinculado. Sin esto, la tarjeta de Configuracion mostraba
                 // "vinculado" en todos los tenants y el enroll moria con 409 sin explicacion.
@@ -298,6 +298,9 @@ public static class FingerprintEndpoints
             // tuviera de antes (otra PC, otro gym) no tiene por que sobrevivir.
             var res = await rpc.TemplatesAsync(ct);
             if (res is not null) await store.ReemplazarAsync(res.TenantId, res.Templates);
+            // Y las del gimnasio anterior se van del disco: son datos biometricos de socios
+            // de un gimnasio que ya no es dueno de esta computadora (Ley 29733).
+            await store.OlvidarOtrosAsync(tenantId);
 
             return Results.Json(new { ok = true, tenant_id = tenantId, gym, templates = res?.Templates.Count ?? 0 });
         }).AddEndpointFilter(ApiKeyFilter);

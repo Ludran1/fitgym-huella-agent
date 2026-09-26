@@ -100,7 +100,7 @@ public sealed class LatidoService : BackgroundService
             version = typeof(LatidoService).Assembly.GetName().Version?.ToString(3),
             lector_conectado = _device.IsConnected,
             dispositivo = _device.DeviceName,
-            huellas_cargadas = await _store.CountAsync(),
+            huellas_cargadas = await _store.CountAsync(_rpc.TenantId),
             decide = vigente.AbreSinNavegador && _scanner.Enabled ? "agente" : "navegador",
             umbral = vigente.Umbral,
             // El ÚLTIMO estado conocido del relé, sin volver a abrir el puerto.
