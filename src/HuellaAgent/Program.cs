@@ -86,6 +86,9 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<FingerprintScanner
 // el flag está en false, que es el default hasta que cada gym lo estrene. La bocina es su
 // aviso sonoro: en la puerta no hay pantalla y el lector no tiene luz ni zumbador propios.
 builder.Services.AddSingleton<Bocina>();
+// Las ultimas decisiones del portero, que viajan en el latido para poder verlas desde
+// super-admin sin entrar a la PC del gimnasio.
+builder.Services.AddSingleton<Bitacora>();
 builder.Services.AddHostedService<PorteroService>();
 builder.Services.AddSingleton<IRelay>(sp =>
     RelayFactory.Create(sp.GetRequiredService<AgentConfig>(), sp.GetRequiredService<ILoggerFactory>()));

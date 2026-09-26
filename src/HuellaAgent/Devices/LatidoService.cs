@@ -38,14 +38,15 @@ public sealed class LatidoService : BackgroundService
     private readonly IRelay _relay;
     private readonly ConfigDelGimnasio _gym;
     private readonly AgentConfig _cfg;
+    private readonly Bitacora _bitacora;
     private readonly ILogger<LatidoService> _log;
 
     public LatidoService(HuellaRpc rpc, IFingerprintDevice device, ITemplateStore store,
                          FingerprintScanner scanner, IRelay relay, ConfigDelGimnasio gym,
-                         AgentConfig cfg, ILogger<LatidoService> log)
+                         AgentConfig cfg, Bitacora bitacora, ILogger<LatidoService> log)
     {
         _rpc = rpc; _device = device; _store = store; _scanner = scanner;
-        _relay = relay; _gym = gym; _cfg = cfg; _log = log;
+        _relay = relay; _gym = gym; _cfg = cfg; _bitacora = bitacora; _log = log;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -107,6 +108,16 @@ public sealed class LatidoService : BackgroundService
             torniquete = !vigente.TieneTorniquete ? "off" : _relay.IsConnected ? "ready" : "error",
             ultimo_dedo_en = _scanner.UltimaLecturaUtc?.ToString("o"),
             ultimo_error = _device.LastError ?? _relay.LastError,
+            // Las ultimas decisiones del portero, para verlas desde super-admin sin entrar a
+            // la PC del gimnasio. Ver Bitacora: no es el log, son las decisiones.
+            eventos = _bitacora.Ultimos().Select(e => new
+            {
+                t = e.EnUtc.ToString("o"),
+                que = e.Que,
+                quien = e.Quien,
+                score = e.Score,
+                motivo = e.Motivo,
+            }).ToArray(),
             boot_id = Api.FingerprintEndpoints.BootId,
         }, ct);
 
