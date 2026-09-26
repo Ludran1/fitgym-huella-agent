@@ -300,7 +300,11 @@ public static class FingerprintEndpoints
             if (res is not null) await store.ReemplazarAsync(res.TenantId, res.Templates);
             // Y las del gimnasio anterior se van del disco: son datos biometricos de socios
             // de un gimnasio que ya no es dueno de esta computadora (Ley 29733).
-            await store.OlvidarOtrosAsync(tenantId);
+            //
+            // Se conserva `res.TenantId` —lo que se ACABA de escribir— y no `tenantId`. Hoy
+            // son el mismo valor; si algun dia difirieran, pasar `tenantId` borraria la lista
+            // recien bajada y el lector quedaria vacio sin que nadie lo note.
+            await store.OlvidarOtrosAsync(res?.TenantId ?? tenantId);
 
             return Results.Json(new { ok = true, tenant_id = tenantId, gym, templates = res?.Templates.Count ?? 0 });
         }).AddEndpointFilter(ApiKeyFilter);

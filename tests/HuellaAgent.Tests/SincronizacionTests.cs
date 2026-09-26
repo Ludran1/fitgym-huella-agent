@@ -195,4 +195,25 @@ public class SincronizacionTests : IDisposable
         Assert.Equal(1, await store.CountAsync(OtroGym));
         Assert.Equal(3, await store.CountAsync());   // sin tenant, sigue siendo todo el archivo
     }
+
+    /// <summary>
+    /// "Volver a vincular" al MISMO gimnasio no puede borrar nada.
+    ///
+    /// Es el boton que la tarjeta de Configuracion ofrece como arreglo para todo ("re-vincular
+    /// es idempotente, barato, y es lo unico que arregla"), asi que se aprieta seguido y a
+    /// ciegas. Si `OlvidarOtrosAsync` se llevara puesto al tenant que conserva, ese clic
+    /// vaciaria el lector del gimnasio y nadie podria entrar hasta re-enrolar a todos.
+    /// </summary>
+    [Fact]
+    public async Task Volver_a_vincular_al_mismo_gimnasio_no_borra_sus_huellas()
+    {
+        var store = Store();
+        await store.SaveAsync(Gym, "ana", "T-ANA");
+        await store.SaveAsync(Gym, "beto", "T-BETO");
+
+        await store.OlvidarOtrosAsync(Gym);
+        await store.OlvidarOtrosAsync(Gym);   // dos clics seguidos, que es lo que pasa de verdad
+
+        Assert.Equal(2, await store.CountAsync(Gym));
+    }
 }
