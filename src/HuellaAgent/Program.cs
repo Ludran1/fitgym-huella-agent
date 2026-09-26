@@ -8,7 +8,20 @@ using HuellaAgent.Storage;
 using HuellaAgent.Supabase;
 using Serilog;
 
-var builder = WebApplication.CreateBuilder(args);
+// El appsettings.json se busca al lado del EXE, no en el directorio actual.
+//
+// `CreateBuilder(args)` a secas usa Directory.GetCurrentDirectory() como content root, y de
+// ahi lee appsettings.json. En recepcion funcionaba de pura casualidad: run-hidden.vbs hace
+// `sh.CurrentDirectory = dir` antes de llamar a launch.ps1. Lanzado desde cualquier otra
+// carpeta —un launch.ps1 a mano, la tarea sin "Iniciar en", el exe por doble clic— el
+// archivo no aparecia y TODA la config del gimnasio volvia a los defaults en silencio:
+// UseRealDevice=false (lector simulado reportando "connected"), sin torniquete, sin pulso.
+// Paso el 26-sep en la maquina de desarrollo. El content root ahora es la carpeta del exe.
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args,
+    ContentRootPath = AppContext.BaseDirectory,
+});
 
 // AgentConfig se resuelve por DI para ver la config FINAL (incluye overrides de tests via
 // WebApplicationFactory, que se mergean recien al build). bootCfg es solo para el puerto.

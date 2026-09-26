@@ -9,7 +9,7 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <!-- Versión del agente: el launcher (launch.ps1) la compara contra el tag del último
          release en GitHub para auto-actualizar. Subir esto en cada release nuevo. -->
-    <Version>1.2.3</Version>
+    <Version>1.2.4</Version>
     <!-- El agente es Windows en produccion, pero compila/testea en Linux (MockDevice). -->
   </PropertyGroup>
 

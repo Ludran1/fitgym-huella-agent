@@ -24,10 +24,18 @@ public static class DeviceFactory
             real.TryReconnect();   // primer intento ya, para que /health diga algo util
             return real;
         }
+
+        // Un ZKTeco enchufado + UseRealDevice=false es casi siempre un accidente, no una
+        // eleccion: el appsettings.json no se encontro, o quedo el de un build de dev. Antes
+        // esto era invisible —/health decia reader "connected" sobre un lector inventado— y
+        // el gimnasio se enteraba cuando a nadie le abria la puerta. Que grite.
+        if (OperatingSystem.IsWindows() && UsbPresencia.HayLector())
+            logger.LogWarning("Hay un lector ZKTeco enchufado pero UseRealDevice=false: va MockDevice y NADIE va a poder entrar. Revisar que appsettings.json este junto al exe.");
 #else
         if (cfg.UseRealDevice)
             logger.LogWarning("UseRealDevice=true pero este build no trae el SDK real (falta publicar con -r win-x64): va MockDevice.");
 #endif
+
         if (cfg.ContinuousScan && cfg.MockAutoFinger)
             logger.LogWarning("MockDevice con MockAutoFinger=true y scanner continuo: va a inventar dedos cada 2s. Solo para dev.");
         return new MockDevice(cfg);

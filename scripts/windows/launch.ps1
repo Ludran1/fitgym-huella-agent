@@ -123,7 +123,9 @@ try {
 }
 
 # ── 2. Lanzar el agente OCULTO ────────────────────────────────────────────────
-Start-Process -FilePath $exe -WindowStyle Hidden
+# -WorkingDirectory: el agente lee su appsettings.json al lado del exe desde v1.2.4, pero
+# esto igual lo deja explicito para cualquiera que lea el script.
+Start-Process -FilePath $exe -WindowStyle Hidden -WorkingDirectory $dir
 
 # ── 3. Si actualizamos, comprobar que de verdad arranco ───────────────────────
 #
@@ -144,7 +146,7 @@ if ($actualizadoA -and (Test-Path $backup)) {
       # tampoco queremos que reintente en loop, asi que ver la nota de abajo.
       $v = (Get-Item $exe).VersionInfo.FileVersion
       if ($v) { Set-Content -Path $vfile -Value ([version]$v).ToString() }
-      Start-Process -FilePath $exe -WindowStyle Hidden
+      Start-Process -FilePath $exe -WindowStyle Hidden -WorkingDirectory $dir
       Anotar "restaurada la version anterior ($v)"
     } catch {
       Anotar "NO SE PUDO RESTAURAR: $($_.Exception.Message)"

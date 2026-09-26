@@ -114,4 +114,39 @@ public class PaqueteTests
         Assert.True(Version.TryParse(m.Groups[1].Value.Trim(), out _),
             $"<Version> dice '{m.Groups[1].Value}' y launch.ps1 la parsea con [version]");
     }
+
+    /// <summary>
+    /// El agente tiene que leer su appsettings.json de AL LADO DEL EXE, no del directorio
+    /// actual. `CreateBuilder(args)` a secas usa Directory.GetCurrentDirectory(), y eso hacia
+    /// que la config del gimnasio desapareciera en silencio cuando el proceso arrancaba desde
+    /// otra carpeta: UseRealDevice volvia a false (lector simulado diciendo "connected"),
+    /// sin torniquete y sin pulso. Funcionaba en recepcion solo porque run-hidden.vbs fija el
+    /// CurrentDirectory antes de llamar a launch.ps1; cualquier otro camino lo rompia.
+    /// Paso el 26-sep corriendo launch.ps1 a mano.
+    /// </summary>
+    [Fact]
+    public void El_agente_lee_su_config_al_lado_del_exe()
+    {
+        var program = File.ReadAllText(Path.Combine(Raiz(), "src", "HuellaAgent", "Program.cs"));
+        // Sin los comentarios: esta misma explicacion nombra el CreateBuilder(args) que prohibe.
+        var codigo = string.Join("\n", program.Split('\n').Where(l => !l.TrimStart().StartsWith("//")));
+
+        Assert.Contains("ContentRootPath = AppContext.BaseDirectory", codigo);
+        Assert.DoesNotContain("CreateBuilder(args)", codigo);
+    }
+
+    /// <summary>
+    /// Y launch.ps1 lo arranca con el directorio de trabajo puesto igual. Es redundante con
+    /// el ContentRootPath a proposito: son las dos unicas cosas que pueden hacer que un
+    /// gimnasio corra con lector simulado sin que nadie lo note.
+    /// </summary>
+    [Fact]
+    public void Launch_arranca_el_agente_en_su_propia_carpeta()
+    {
+        var script = File.ReadAllText(Path.Combine(Raiz(), "scripts", "windows", "launch.ps1"));
+
+        var arranques = script.Split("Start-Process").Length - 1;
+        Assert.Equal(2, arranques);   // el normal y el de la vuelta atras
+        Assert.Equal(arranques, script.Split("-WorkingDirectory $dir").Length - 1);
+    }
 }
