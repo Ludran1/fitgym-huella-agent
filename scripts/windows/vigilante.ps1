@@ -69,4 +69,35 @@ if ("$($health.device)" -match "Mock") {
   $usb = Get-PnpDevice -PresentOnly | Where-Object { $_.InstanceId -match "VID_1B55" -and $_.Status -eq "OK" }
   if (-not $usb) { exit 0 }
   Arrancar "lector simulado con el USB presente ($($usb[0].FriendlyName)); reinicio"
+  exit 0
+}
+
+# 4. Chequeo de actualizacion, una vez por dia.
+#
+# POR QUE ESTA ACA Y NO SOLO EN LA TAREA DE INICIO DE SESION. La auto-actualizacion vive
+# en launch.ps1, y a launch.ps1 lo corria UNICAMENTE la tarea `onlogon`. O sea que una PC
+# que queda prendida con la sesion abierta —que es exactamente lo que se le pide a la PC de
+# recepcion: 30 dias sin que nadie la toque— no se actualizaba NUNCA. Y si a esa PC ademas
+# le falta la tarea de arranque, el vigilante la mantenia viva para siempre en una version
+# vieja, en silencio. La promesa "se actualiza solo" no se cumplia justo en el caso que
+# mas importa.
+#
+# Solo se llega aca con el agente sano (los pasos 2 y 3 ya salieron). launch.ps1 sabe no
+# lanzar un segundo proceso si este sigue vivo, y solo lo reemplaza si hay version nueva:
+# el chequeo normal son unos KB contra la API de GitHub, no los 55 MB del ZIP.
+$marcaUpd = Join-Path $datos "vigilante.ultimo-chequeo"
+$tocaChequear = $true
+if (Test-Path $marcaUpd) {
+  $tocaChequear = ((Get-Date) - (Get-Item $marcaUpd).LastWriteTime).TotalHours -ge 20
+}
+if ($tocaChequear) {
+  $launch = Join-Path (Split-Path $Exe) "launch.ps1"
+  if (Test-Path $launch) {
+    New-Item -ItemType Directory -Force -Path $datos | Out-Null
+    Set-Content -Path $marcaUpd -Value (Get-Date -Format o)   # antes de correr: si falla, no se reintenta en loop
+    Log "chequeo diario de actualizacion"
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $launch
+  } else {
+    Log "no encuentro launch.ps1: esta PC NO se va a actualizar sola"
+  }
 }

@@ -123,10 +123,20 @@ try {
 }
 
 # ── 2. Lanzar el agente OCULTO ────────────────────────────────────────────────
+#
+# Salvo que YA este vivo y no hayamos actualizado. Este script lo corre la tarea al iniciar
+# sesion —donde nunca hay un agente corriendo— pero desde la v1.2.8 tambien lo llama el
+# vigilante una vez por dia, para que una PC que nunca cierra sesion igual se actualice.
+# En ese caso lanzar de nuevo levantaria un segundo proceso que no puede tomar el 8000 y se
+# apaga solo a los pocos segundos: ruido en los logs y un susto para quien los lea.
+#
 # -WorkingDirectory: el agente lee su appsettings.json al lado del exe desde v1.2.4, pero
 # esto igual lo deja explicito para cualquiera que lea el script.
-Start-Process -FilePath $exe -WindowStyle Hidden -WorkingDirectory $dir
-
+$yaEstaVivo = $false
+if (-not $actualizadoA) {
+  try { $yaEstaVivo = [bool](Invoke-RestMethod -Uri "http://localhost:8000/health" -TimeoutSec 3) } catch { }
+}
+if (-not $yaEstaVivo) { Start-Process -FilePath $exe -WindowStyle Hidden -WorkingDirectory $dir }
 # ── 3. Si actualizamos, comprobar que de verdad arranco ───────────────────────
 #
 # Y si no, volver a la version anterior SOLO. Es lo unico que evita que una version mala
