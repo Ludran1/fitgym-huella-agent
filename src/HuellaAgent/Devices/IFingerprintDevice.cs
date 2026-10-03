@@ -13,7 +13,18 @@ namespace HuellaAgent.Devices;
 /// La calidad que SI existe es la del enrolado (1:1 entre las tres capturas, `Match`), y
 /// esa la devuelve /enroll.
 /// </summary>
-public sealed record CaptureResult(string Template);
+/// <param name="Imagen">
+/// La huella que se acaba de leer, BMP en base64, para MOSTRARSELA a quien enrola.
+///
+/// El SDK siempre la entrega (llena el buffer de imagen en cada AcquireFingerprint) y
+/// hasta la v1.2.10 se tiraba. Devolverla es lo unico que da senal en la PRIMERA captura:
+/// el puntaje de calidad es una comparacion entre dos capturas, asi que ahi todavia no
+/// existe, y es justo donde se decide si el dedo esta centrado.
+///
+/// null = no se pudo armar (medidas raras, o el lector simulado). La UI tiene que
+/// funcionar sin ella: los agentes anteriores a la v1.3 no la mandan.
+/// </param>
+public sealed record CaptureResult(string Template, string? Imagen = null);
 
 /// <summary>Match de identify: uid interno del SDK + score de similitud.</summary>
 public sealed record IdentifyMatch(int Uid, int Score);

@@ -26,6 +26,11 @@ public sealed class ZkfpDevice : IFingerprintDevice, IDisposable
     private readonly int _threshold;
     private readonly IntPtr _device;
     private readonly byte[] _imageBuffer;
+    // Medidas del lector (parametros 1 y 2). Eran locales del constructor y solo servian
+    // para dimensionar el buffer; se guardan porque sin ellas el buffer es una tira de
+    // bytes sin forma y no se puede armar la imagen.
+    private readonly int _ancho;
+    private readonly int _alto;
     private readonly object _sdkLock = new();
     private bool _initialized;
 
@@ -85,6 +90,8 @@ public sealed class ZkfpDevice : IFingerprintDevice, IDisposable
         size = 4;
         zkfp2.GetParameters(_device, 2, paramBuf, ref size);
         zkfp2.ByteArray2Int(paramBuf, ref height);
+        _ancho = width;
+        _alto = height;
         _imageBuffer = new byte[Math.Max(1, width * height)];
 
         // Modelo REAL del lector (parametro 1102), en vez de asumir SLK20R: el mismo SDK
@@ -133,7 +140,11 @@ public sealed class ZkfpDevice : IFingerprintDevice, IDisposable
             {
                 _ultimoChequeo = DateTime.UtcNow;
                 LastError = null;
-                return new CaptureResult(zkfp2.BlobToBase64(template, cb));
+                // La imagen sale del MISMO buffer que acaba de llenar AcquireFingerprint, asi
+                // que es exactamente el dedo de este template, no una lectura aparte.
+                return new CaptureResult(
+                    zkfp2.BlobToBase64(template, cb),
+                    ImagenGris.ABmpBase64(_imageBuffer, _ancho, _alto));
             }
 
             // Cualquier rc que NO sea "sin dedo" es el lector quejandose: que lo recicle

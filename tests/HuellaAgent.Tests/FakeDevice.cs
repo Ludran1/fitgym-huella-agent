@@ -68,7 +68,12 @@ public sealed class FakeDevice : IFingerprintDevice
 
     /// <summary>Puntaje 1:1 que devuelve el doble; los tests lo mueven para probar el enrolado flojo.</summary>
     public int MatchScore { get; set; } = 900;
-    public int Match(string template1, string template2) => MatchScore;
+
+    /// <summary>Para probar que un Match roto no tumba la captura (el puntaje es auxiliar).</summary>
+    public bool MatchThrows { get; set; }
+
+    public int Match(string template1, string template2) =>
+        MatchThrows ? throw new InvalidOperationException("template invalido") : MatchScore;
 
     public IdentifyMatch? Identify(string probeTemplate, IReadOnlyList<StoredTemplate> db, string dbKey)
     {

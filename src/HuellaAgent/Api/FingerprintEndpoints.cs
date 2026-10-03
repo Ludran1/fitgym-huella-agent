@@ -8,7 +8,17 @@ namespace HuellaAgent.Api;
 
 // DTOs del contrato (huellaApi.ts). El binding snake_case ↔ PascalCase lo hace la
 // JsonNamingPolicy.SnakeCaseLower configurada en Program.cs.
-public sealed record CaptureReq(int? Timeout);
+/// <param name="Previos">
+/// Las capturas que el frontend ya tiene de ESTE enrolado, en base64.
+///
+/// Sirven para contestar al instante cuanto se parece la que se acaba de leer a las
+/// anteriores. Hasta la v1.2.10 esa comparacion solo pasaba en /enroll, o sea despues de
+/// las TRES: el mostrador apoyaba tres veces y recien ahi se enteraba de que no coincidian
+/// y habia que empezar de cero. Con esto, la numero 2 que no pega se detecta en la 2.
+///
+/// Opcional: sin `previos` el endpoint se comporta igual que siempre.
+/// </param>
+public sealed record CaptureReq(int? Timeout, string[]? Previos);
 public sealed record EnrollReq(string ClienteId, string TenantId, string Template1, string Template2, string Template3);
 public sealed record IdentifyReq(string TenantId);
 public sealed record TurnstileReq(string TenantId);
@@ -112,7 +122,7 @@ public static class FingerprintEndpoints
         var api = app.MapGroup("/api/fingerprint").AddEndpointFilter(ApiKeyFilter);
 
         // POST capture {timeout} → {template, mismo_apoyo} · 408 sin dedo
-        api.MapPost("/capture", async (CaptureReq? body, IFingerprintDevice device, FingerprintScanner scanner, AgentConfig cfg, CancellationToken ct) =>
+        api.MapPost("/capture", async (CaptureReq? body, IFingerprintDevice device, FingerprintScanner scanner, AgentConfig cfg, ILoggerFactory lf, CancellationToken ct) =>
         {
             try
             {
@@ -142,10 +152,38 @@ public static class FingerprintEndpoints
 
                 var r = await device.CaptureAsync(body?.Timeout ?? 15, ct);
 
+                // Cuanto se parece esta captura a las que el frontend ya tiene.
+                //
+                // Es la MISMA cuenta que hace /enroll (`Match` 1:1, escala 0-1000), solo
+                // que ahora llega en el momento en vez de al final. El puntaje no existe
+                // para la primera captura —es una comparacion, y no hay contra que— pero
+                // desde la segunda alcanza para cortar ahi mismo en vez de pedir las tres
+                // y rechazarlas juntas.
+                //
+                // Nunca hace fallar la captura: si un template previo esta corrupto, el
+                // Match tira y se devuelve la lectura igual, sin puntajes. La que decide
+                // de verdad sigue siendo /enroll.
+                int[]? puntajes = null;
+                if (body?.Previos is { Length: > 0 } previos)
+                {
+                    try { puntajes = previos.Select(p => device.Match(p, r.Template)).ToArray(); }
+                    catch (Exception ex)
+                    {
+                        lf.CreateLogger("Capture").LogWarning("no se pudo puntuar la captura: {Msg}", ex.Message);
+                    }
+                }
+
                 // Se captura igual y se deja decidir al que llama, en vez de tirar un error.
                 // Fallar aca dejaria el enrolado trabado con un mensaje que el mostrador no
                 // puede accionar; con el aviso, el frontend descarta y pide de nuevo.
-                return Results.Json(new { template = r.Template, mismo_apoyo = mismoApoyo });
+                return Results.Json(new
+                {
+                    template = r.Template,
+                    mismo_apoyo = mismoApoyo,
+                    imagen = r.Imagen,
+                    puntajes,
+                    minimo = cfg.EnrollMinScore,
+                });
             }
             catch (NoFingerException) { return Results.Json(new { detail = "timeout sin dedo" }, statusCode: 408); }
             catch (DeviceUnavailableException ex) { return Results.Json(new { detail = ex.Message }, statusCode: 503); }
