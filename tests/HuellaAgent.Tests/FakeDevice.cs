@@ -56,7 +56,7 @@ public sealed class FakeDevice : IFingerprintDevice
     public Task<CaptureResult> CaptureAsync(int timeoutSeconds, CancellationToken ct)
         => CaptureNoFinger ? throw new NoFingerException() : Task.FromResult(Capture);
 
-    public CaptureResult? TryCapture()
+    public CaptureResult? TryCapture(bool conImagen = false)
     {
         Interlocked.Increment(ref TryCaptureCalls);
         if (TryCaptureFalla) throw new DeviceUnavailableException("el lector ya no aparece");

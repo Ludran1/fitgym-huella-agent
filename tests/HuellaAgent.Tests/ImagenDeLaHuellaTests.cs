@@ -64,6 +64,24 @@ public class ImagenDeLaHuellaTests
         Assert.Equal(252 * 10, bmp.Length - inicio);
     }
 
+    [Fact]
+    public void El_scanner_de_la_puerta_no_paga_el_costo_de_armar_la_imagen()
+    {
+        // `TryCapture()` la llama el scanner continuo cada pocos ms para identificar en la
+        // puerta. Armar el BMP ahi serian ~90 KB mas su base64 (~215 KB) por cada dedo
+        // leido, en bucle, en la PC de recepcion — y nadie mira esa foto: la imagen solo
+        // existe para el enrolado, que entra por CaptureAsync.
+        //
+        // El default del parametro es lo unico que separa las dos cosas, asi que vale la
+        // pena fijarlo: si alguien lo invierte, el costo vuelve y no se nota hasta que la
+        // puerta de un gym grande se pone lenta.
+        var metodo = typeof(HuellaAgent.Devices.IFingerprintDevice).GetMethod("TryCapture")!;
+        var conImagen = metodo.GetParameters().Single();
+
+        Assert.Equal("conImagen", conImagen.Name);
+        Assert.Equal(false, conImagen.DefaultValue);
+    }
+
     [Theory]
     [InlineData(0, 10)]
     [InlineData(10, 0)]

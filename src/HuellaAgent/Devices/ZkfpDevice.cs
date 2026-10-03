@@ -128,7 +128,7 @@ public sealed class ZkfpDevice : IFingerprintDevice, IDisposable
     }
 
     /// <summary>Una sola lectura, sin esperar. null = no hay dedo en este instante.</summary>
-    public CaptureResult? TryCapture()
+    public CaptureResult? TryCapture(bool conImagen = false)
     {
         lock (_sdkLock)
         {
@@ -144,7 +144,7 @@ public sealed class ZkfpDevice : IFingerprintDevice, IDisposable
                 // que es exactamente el dedo de este template, no una lectura aparte.
                 return new CaptureResult(
                     zkfp2.BlobToBase64(template, cb),
-                    ImagenGris.ABmpBase64(_imageBuffer, _ancho, _alto));
+                    conImagen ? ImagenGris.ABmpBase64(_imageBuffer, _ancho, _alto) : null);
             }
 
             // Cualquier rc que NO sea "sin dedo" es el lector quejandose: que lo recicle
@@ -178,7 +178,7 @@ public sealed class ZkfpDevice : IFingerprintDevice, IDisposable
         while (DateTime.UtcNow < deadline)
         {
             ct.ThrowIfCancellationRequested();
-            var r = TryCapture();
+            var r = TryCapture(conImagen: true);
             if (r is not null) return r;
             await Task.Delay(40, ct);   // sin dedo aun (antes 200ms: un toque corto se escapaba)
         }

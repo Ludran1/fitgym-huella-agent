@@ -39,7 +39,7 @@ public sealed class MockDevice : IFingerprintDevice
     /// asistencia fantasma del ultimo socio enrolado cada 2 segundos, sin que nadie toque
     /// el lector. Para probar el flujo en dev: Agent:MockAutoFinger=true.
     /// </summary>
-    public CaptureResult? TryCapture()
+    public CaptureResult? TryCapture(bool conImagen = false)
     {
         if (!_autoFinger) return null;
         var now = DateTime.UtcNow;

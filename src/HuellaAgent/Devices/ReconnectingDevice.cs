@@ -106,7 +106,7 @@ public sealed class ReconnectingDevice : IFingerprintDevice, IDisposable
         throw new DeviceUnavailableException(LastError ?? "lector desconectado");
     }
 
-    public CaptureResult? TryCapture()
+    public CaptureResult? TryCapture(bool conImagen = false)
     {
         IFingerprintDevice lector;
         lock (_gate)
@@ -114,7 +114,7 @@ public sealed class ReconnectingDevice : IFingerprintDevice, IDisposable
             if (_lector?.IsConnected != true) return null;   // el scanner ya reintenta abrir
             lector = _lector;
         }
-        try { return lector.TryCapture(); }
+        try { return lector.TryCapture(conImagen); }
         catch (DeviceUnavailableException ex) { Perdido(ex); return null; }
     }
 

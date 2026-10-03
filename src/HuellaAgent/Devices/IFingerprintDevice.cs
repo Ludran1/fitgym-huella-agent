@@ -93,7 +93,14 @@ public interface IFingerprintDevice
     /// Intenta leer un dedo AHORA, sin bloquear. null = no hay dedo apoyado en este instante.
     /// La llama el loop del scanner cada pocos ms; no debe esperar ni dormir.
     /// </summary>
-    CaptureResult? TryCapture();
+    /// <param name="conImagen">
+    /// Armar tambien la imagen del dedo (BMP base64). **Por defecto NO**, y eso importa:
+    /// esta la llama el scanner continuo cada pocos ms para identificar en la puerta, y
+    /// armar un BMP de ~90 KB mas su base64 en cada lectura serian ~215 KB de basura por
+    /// dedo, en bucle, en la PC de recepcion — para una foto que solo mira el enrolado.
+    /// La pide `CaptureAsync`, que es el camino del enrolado.
+    /// </param>
+    CaptureResult? TryCapture(bool conImagen = false);
 
     /// <summary>
     /// 1:N de un template ya capturado contra los templates del tenant. null = sin match.
