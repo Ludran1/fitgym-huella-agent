@@ -10,8 +10,12 @@ public interface ITemplateStore
     /// <summary>Todos los templates de un tenant (para cargar la DB en memoria del SDK).</summary>
     Task<IReadOnlyList<StoredTemplate>> LoadAsync(string tenantId);
 
-    /// <summary>Guarda/actualiza el template de un cliente. Devuelve el uid (reusado o nuevo).</summary>
-    Task<int> SaveAsync(string tenantId, string clienteId, string template);
+    /// <summary>
+    /// Guarda/actualiza el template de un DEDO de un cliente. Devuelve el uid (reusado o nuevo).
+    /// </summary>
+    /// <param name="dedo">1 = principal, 2 = respaldo. La clave es (cliente, dedo): sin eso,
+    /// enrolar el segundo dedo pisaba el primero.</param>
+    Task<int> SaveAsync(string tenantId, string clienteId, string template, int dedo = 1);
 
     /// <summary>
     /// Reemplaza TODO el conjunto de un tenant por el que manda el servidor.

@@ -19,7 +19,12 @@ namespace HuellaAgent.Api;
 /// Opcional: sin `previos` el endpoint se comporta igual que siempre.
 /// </param>
 public sealed record CaptureReq(int? Timeout, string[]? Previos);
-public sealed record EnrollReq(string ClienteId, string TenantId, string Template1, string Template2, string Template3);
+/// <param name="Dedo">1 = principal, 2 = respaldo. Opcional: sin el, 1 — que es lo de
+/// siempre, asi un panel anterior a esto sigue funcionando igual.</param>
+/// <param name="Etiqueta">Que dedo es, en palabras ("Indice izquierdo"). Solo para poder
+/// decirle al socio cual probar cuando el principal no lee.</param>
+public sealed record EnrollReq(string ClienteId, string TenantId, string Template1, string Template2, string Template3,
+                              int? Dedo = null, string? Etiqueta = null);
 public sealed record IdentifyReq(string TenantId);
 public sealed record TurnstileReq(string TenantId);
 public sealed record PairReq(string Token, string SupabaseUrl, string AnonKey);
@@ -224,7 +229,8 @@ public static class FingerprintEndpoints
             try { merged = device.Merge(body.Template1, body.Template2, body.Template3); }
             catch (Exception ex) { return Results.Json(new { ok = false, detail = $"merge fallo: {ex.Message}" }, statusCode: 422); }
 
-            var uid = await store.SaveAsync(body.TenantId, body.ClienteId, merged);
+            var dedo = body.Dedo is 1 or 2 ? body.Dedo.Value : 1;
+            var uid = await store.SaveAsync(body.TenantId, body.ClienteId, merged, dedo);
 
             // Persistencia durable. ANTES esto era "best-effort" e ignoraba el resultado:
             // si el agente estaba vinculado a OTRO gym, huella_enroll devolvia ok:false y
@@ -243,7 +249,10 @@ public static class FingerprintEndpoints
                 // (en un gym la huella DEBE persistir en la nube; no es exito real).
                 return Results.Json(new { ok = true, uid, durable = false, calidad = peor, pares });
 
-            var durableUid = await rpc.EnrollAsync(body.ClienteId, merged, ct);
+            // La calidad viaja al servidor: hasta la v1.3 se calculaba aca, se escribia en
+            // el log de ESTA PC y se tiraba. Por eso un enrolado flojo solo se descubria
+            // semanas despues, mirando como leia esa persona en la puerta.
+            var durableUid = await rpc.EnrollAsync(body.ClienteId, merged, ct, dedo, peor, pares, body.Etiqueta);
             if (durableUid is null)
                 return Results.Json(new { ok = false, detail = "Guardado en el lector pero NO en la nube: el lector esta vinculado a otro gym o el cliente no pertenece a este gym. Re-vincula el lector (Configuracion -> Lector de huella) y volve a enrolar." }, statusCode: 409);
 

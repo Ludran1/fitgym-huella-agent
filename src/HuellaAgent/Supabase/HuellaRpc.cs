@@ -84,14 +84,30 @@ public sealed class HuellaRpc
         return req;
     }
 
-    /// <summary>huella_enroll(token, cliente_id, template) → uid (server-side).</summary>
-    public async Task<int?> EnrollAsync(string clienteId, string template, CancellationToken ct)
+    /// <summary>
+    /// huella_enroll(token, cliente_id, template, …) → uid (server-side).
+    ///
+    /// `dedo` permite dos huellas por persona (1 principal, 2 respaldo): ZKTeco recomienda
+    /// una de cada mano, y sin eso un socio con un corte o la mano seca no entra y no tiene
+    /// alternativa.
+    ///
+    /// `calidad` y `pares` son la comparacion 1:1 entre las tres capturas. El agente ya los
+    /// calculaba y los dejaba morir en el log de esta PC; mandarlos es lo que permite saber
+    /// que una huella salio floja SIN esperar a que falle en la puerta durante semanas.
+    /// </summary>
+    public async Task<int?> EnrollAsync(string clienteId, string template, CancellationToken ct,
+                                        int dedo = 1, int? calidad = null, int[]? pares = null,
+                                        string? etiqueta = null)
     {
         var c = Creds();
         if (c is null) return null;
         using var cts = ConTecho(TechoLargo, ct);
         var resp = await _http.SendAsync(Req(c, "huella_enroll",
-            new { p_token = c.Token, p_cliente_id = clienteId, p_template = template }), cts.Token);
+            new
+            {
+                p_token = c.Token, p_cliente_id = clienteId, p_template = template,
+                p_dedo = dedo, p_calidad = calidad, p_pares = pares, p_etiqueta = etiqueta,
+            }), cts.Token);
         if (!resp.IsSuccessStatusCode) { _log.LogWarning("huella_enroll fallo: {S}", resp.StatusCode); return null; }
         var json = await resp.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: ct);
         if (json.TryGetProperty("ok", out var ok) && ok.GetBoolean() && json.TryGetProperty("uid", out var uid))

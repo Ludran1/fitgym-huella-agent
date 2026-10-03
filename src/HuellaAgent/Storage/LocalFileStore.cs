@@ -44,7 +44,7 @@ public sealed class LocalFileStore : ITemplateStore
         finally { _lock.Release(); }
     }
 
-    public async Task<int> SaveAsync(string tenantId, string clienteId, string template)
+    public async Task<int> SaveAsync(string tenantId, string clienteId, string template, int dedo = 1)
     {
         await _lock.WaitAsync();
         try
@@ -56,7 +56,10 @@ public sealed class LocalFileStore : ITemplateStore
                 db[tenantId] = list;
             }
 
-            var existing = list.FirstOrDefault(t => t.ClienteId == clienteId);
+            // La clave es la persona Y EL DEDO. Buscar solo por ClienteId —como hasta la
+            // v1.3— hacia que enrolar el segundo dedo PISARA el primero: el socio terminaba
+            // con una sola huella, justo lo contrario de lo que se le acababa de pedir.
+            var existing = list.FirstOrDefault(t => t.ClienteId == clienteId && t.Dedo == dedo);
             int uid;
             if (existing is not null)
             {
@@ -66,7 +69,7 @@ public sealed class LocalFileStore : ITemplateStore
             else
             {
                 uid = (list.Count == 0 ? 0 : list.Max(t => t.Uid)) + 1;
-                list.Add(new StoredTemplate { ClienteId = clienteId, Uid = uid, Template = template });
+                list.Add(new StoredTemplate { ClienteId = clienteId, Uid = uid, Template = template, Dedo = dedo });
             }
 
             await WriteAllAsync(db);
