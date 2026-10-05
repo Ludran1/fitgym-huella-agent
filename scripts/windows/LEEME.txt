@@ -1,69 +1,30 @@
 ==========================================================
- LECTOR DE HUELLA - FitGym  (instalacion)   v1.2.0
+ LECTOR DE HUELLA - PeakGym
 ==========================================================
-Para usar el lector de huella ZKTeco (SLK20R o ZK9500) en la PC de recepcion.
+Esta carpeta la dejo el instalador. No hace falta abrir ni tocar nada aca:
+el programa arranca solo al iniciar sesion y se actualiza solo.
 
-----------------------------------------------------------
-INSTALAR  (1 solo paso)
-----------------------------------------------------------
-1. Clic derecho en  instalar.bat  ->  "Ejecutar como administrador".
-   Eso hace TODO: driver, agente, arranque automatico, vigilante y los
-   ajustes de energia para que Windows no apague el lector.
-   (Si SmartScreen avisa: "Mas informacion" -> "Ejecutar de todas formas".)
+INSTALAR O REINSTALAR
+  Ejecuta PeakGym-Lector-Setup.exe (se descarga desde PeakGym:
+  Configuracion -> Integraciones -> Lector de huella).
+  Si Windows avisa "Windows protegio su PC": "Mas informacion" ->
+  "Ejecutar de todas formas".
 
-2. Al terminar TE DICE si quedo andando y, si no, que falta.
-   No hace falta que revises nada a mano.
+VINCULAR CON TU GIMNASIO
+  En PeakGym: Configuracion -> Integraciones -> Lector de huella ->
+  "Vincular a este gimnasio". Sin esto las huellas no se guardan en la nube.
 
-----------------------------------------------------------
-VINCULAR con tu gimnasio
-----------------------------------------------------------
-1. Entra a la app de FitGym (con tu cuenta del gym).
-2. Configuracion -> "Lector de huella" -> boton "Vincular lector".
-3. Listo: las huellas se guardan en la nube.
-   En /health, "gym" te dice a cual quedo vinculado. Si dice otro gimnasio,
-   volve a vincularlo: si no, las huellas que registres NO se guardan.
+DESINSTALAR
+  Configuracion de Windows -> Aplicaciones -> "PeakGym Lector de Huella".
+  Las huellas y el vinculo quedan guardados por si lo volves a instalar.
 
-----------------------------------------------------------
-LO UNICO QUE QUEDA A MANO
-----------------------------------------------------------
-La energia y el arranque automatico ya los deja el instalador. Faltan dos
-cosas que no se pueden automatizar:
+LO UNICO QUE QUEDA A MANO (importante si el lector abre la puerta)
+  Que Windows inicie sesion solo despues de un corte de luz. Sin esto, si se
+  corta la luz un domingo, el programa no arranca hasta que alguien entre.
+    Menu Inicio -> escribi  netplwiz  -> Enter
+    Destilda "Los usuarios deben escribir su nombre y contrasena"
+    -> Aceptar -> escribi la contrasena del usuario dos veces.
 
-- Sesion de Windows automatica (netplwiz). Sin esto, si se corta la luz un
-  domingo el agente no arranca hasta que alguien se loguee, y el gimnasio
-  queda sin puerta. El instalador te deja los pasos al terminar.
-- Si es laptop: que cerrar la tapa NO la suspenda.
-
-----------------------------------------------------------
-OPCIONAL: que la puerta abra SIN el navegador
-----------------------------------------------------------
-Desde la v1.2.0 esto YA NO se configura en esta PC: se prende desde el panel
-y el agente se entera solo, en pocos minutos. Lo mismo el torniquete y el
-puerto del rele, que ahora se detecta buscando el CH340.
-
-Verificalo en /health: "decide" debe decir "agente" y "config_origen" debe
-decir "servidor".
-
-OJO: sin internet NO abre. El agente no adivina vigencias.
-
-OJO: sin internet NO abre. El agente no adivina vigencias.
-
-----------------------------------------------------------
-OPCIONAL: torniquete
-----------------------------------------------------------
-Con el modulo USB-rele conectado, en appsettings.json:
-
-    "TurnstileEnabled": true,
-    "RelayPort": "COM3"        <- el puerto real (mira el Administrador de
-                                  dispositivos -> Puertos (COM y LPT))
-
-En /health, "turnstile" dice "ready" si el rele responde, o "error" con el
-motivo si no.
-
-----------------------------------------------------------
 SI ALGO NO ANDA
-----------------------------------------------------------
-- Log del agente:    http://localhost:8000/logs?lines=100
-- Log del vigilante: C:\ProgramData\HuellaAgent\logs\vigilante.log
-- Quitar el agente:  clic derecho en desinstalar-tarea.bat (admin)
-==========================================================
+  PeakGym muestra el estado del lector en la misma pantalla de Vincular.
+  El registro del programa esta en:  http://localhost:8000/logs

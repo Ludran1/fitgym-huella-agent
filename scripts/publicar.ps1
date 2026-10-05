@@ -1,5 +1,14 @@
 # ============================================================================
-#  publicar.ps1 — arma HuellaAgent-Setup.zip, el ZIP que instala un gimnasio.
+#  publicar.ps1 — arma lo que se publica de cada version del agente:
+#
+#    · PeakGym-Lector-Setup.exe  el INSTALADOR. Es lo que baja un gimnasio desde el
+#                                panel. Doble clic, Siguiente, Instalar. Ver
+#                                installer/PeakGymLector.iss.
+#    · HuellaAgent-Setup.zip     la ACTUALIZACION. Nadie lo abre a mano: lo baja
+#                                launch.ps1 de cada PC ya instalada y copia el exe y
+#                                los scripts. Va plano (sin carpetas) porque asi lo
+#                                espera el launch.ps1 de TODAS las versiones ya
+#                                instaladas, y sin el driver (ya esta instalado).
 #
 #  POR QUE EXISTE
 #  --------------
@@ -24,6 +33,8 @@
 #  ---
 #    pwsh scripts/publicar.ps1 -Driver C:\ruta\setup-driver.exe
 #    pwsh scripts/publicar.ps1 -SinDriver          # para probar el empaquetado
+#
+#  Necesita Inno Setup 6 (winget install JRSoftware.InnoSetup).
 # ============================================================================
 [CmdletBinding()]
 param(
@@ -33,7 +44,9 @@ param(
   # donde el driver ya esta. Nunca es el default: un ZIP sin driver instala un agente
   # que no abre el lector, y el gimnasio no tiene como saberlo.
   [switch]$SinDriver,
-  [string]$Salida = "publish"
+  [string]$Salida = "publish",
+  # El compilador de Inno Setup. Vacio = se busca donde lo deja winget o el instalador.
+  [string]$Iscc = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -98,9 +111,9 @@ if ($Driver) {
 Paso "Verificando el paquete"
 $errores = @()
 
-# instalar.bat aborta si le falta alguno de estos.
-foreach ($f in @("HuellaAgent.exe", "instalar.bat", "run-hidden.vbs", "vigilante-oculto.vbs",
-                 "ajustes-energia.bat", "verificar.ps1", "appsettings.json", "version.txt", "LEEME.txt")) {
+# El instalador (PeakGymLector.iss) no compila si le falta alguno de estos.
+foreach ($f in @("HuellaAgent.exe", "launch.ps1", "run-hidden.vbs", "vigilante.ps1", "vigilante-oculto.vbs",
+                 "verificar.ps1", "appsettings.json", "version.txt", "LEEME.txt")) {
   if (-not (Test-Path (Join-Path $pkg $f))) { $errores += "falta $f" }
 }
 
@@ -124,17 +137,50 @@ if ($errores.Count) {
   exit 1
 }
 
-# ── 5. Comprimir ─────────────────────────────────────────────────────────────
+# ── 5. El instalador ─────────────────────────────────────────────────────────
+if ($SinDriver) {
+  # Un instalador sin driver instalaria un agente que no abre el lector: no se arma.
+  Write-Host "   (sin driver: no armo el instalador .exe, solo el ZIP)" -ForegroundColor Yellow
+} else {
+  Paso "Compilando el instalador (Inno Setup)"
+  if (-not $Iscc) {
+    $Iscc = @(
+      (Join-Path $env:LOCALAPPDATA "Programs\Inno Setup 6\ISCC.exe"),
+      (Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"),
+      (Join-Path $env:ProgramFiles "Inno Setup 6\ISCC.exe")
+    ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+  }
+  if (-not $Iscc -or -not (Test-Path $Iscc)) {
+    Mal "no encuentro ISCC.exe. Instala Inno Setup 6:  winget install JRSoftware.InnoSetup"
+    exit 1
+  }
+  $iss = Join-Path $raiz "installer/PeakGymLector.iss"
+  & $Iscc "/DAppVersion=$version" "/DPkgDir=$pkg" "/O$(Join-Path $raiz $Salida)" "/Q" $iss
+  if ($LASTEXITCODE -ne 0) { Mal "fallo la compilacion del instalador"; exit 1 }
+  $exeSetup = Join-Path $raiz "$Salida/PeakGym-Lector-Setup.exe"
+  $exeVerSetup = (Get-Item $exeSetup).VersionInfo.ProductVersion
+  if (-not "$exeVerSetup".StartsWith($version)) { Mal "el instalador dice $exeVerSetup y el csproj $version"; exit 1 }
+}
+
+# ── 6. El ZIP de actualizacion ──────────────────────────────────────────────
+# Sin el driver: launch.ps1 nunca lo usa (ya esta instalado) y son 13 MB que cada PC
+# bajaria en cada actualizacion.
 $zip = Join-Path $raiz "$Salida/HuellaAgent-Setup.zip"
 if (Test-Path $zip) { Remove-Item $zip -Force }
-Compress-Archive -Path "$pkg/*" -DestinationPath $zip
+Get-ChildItem $pkg -File | Where-Object { $_.Name -ne "setup-driver.exe" } |
+  Compress-Archive -DestinationPath $zip
 $mb = [math]::Round((Get-Item $zip).Length / 1MB, 1)
 
 Write-Host ""
-Write-Host "LISTO  $zip  ($mb MB, v$version)" -ForegroundColor Green
-if ($SinDriver) { Write-Host "OJO: este ZIP va SIN driver. No sirve para un gimnasio." -ForegroundColor Yellow }
+Write-Host "LISTO  v$version" -ForegroundColor Green
+if (-not $SinDriver) {
+  $mbExe = [math]::Round((Get-Item $exeSetup).Length / 1MB, 1)
+  Write-Host "  instalador     $exeSetup  ($mbExe MB)" -ForegroundColor Green
+}
+Write-Host "  actualizacion  $zip  ($mb MB)" -ForegroundColor Green
+if ($SinDriver) { Write-Host "OJO: va SIN driver. No sirve para un gimnasio." -ForegroundColor Yellow }
 Write-Host ""
-Write-Host "Falta publicarlo en Ludran1/fitgym-huella-agent-dist:" -ForegroundColor Gray
+Write-Host "Falta publicarlo en Ludran1/fitgym-huella-agent-dist, con LOS DOS archivos:" -ForegroundColor Gray
 Write-Host "  1. Tag v$version   <- si no coincide, launch.ps1 no actualiza a nadie." -ForegroundColor Gray
 Write-Host "  2. Marcalo como PRE-RELEASE." -ForegroundColor Yellow
 Write-Host "     /releases/latest ignora los pre-releases: ningun gimnasio lo va a tomar." -ForegroundColor Gray
