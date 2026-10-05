@@ -79,12 +79,18 @@ public sealed class LocalFileStore : ITemplateStore
         finally { _lock.Release(); }
     }
 
-    public async Task ReemplazarAsync(string tenantId, IReadOnlyList<StoredTemplate> templates)
+    public async Task<bool> ReemplazarAsync(string tenantId, IReadOnlyList<StoredTemplate> templates)
     {
         await _lock.WaitAsync();
         try
         {
             var db = await ReadAllAsync();
+
+            // Desde la v1.6.1 esto corre en cada latido (5 min), no sólo al arrancar. Si el
+            // servidor dice lo mismo que ya hay, no se toca nada: escribir el archivo y subir
+            // la versión haría que el SDK rearme su base cada 5 minutos sin motivo.
+            if (db.TryGetValue(tenantId, out var actual) && MismoContenido(actual, templates))
+                return false;
             // Se conserva el uid QUE MANDA EL SERVIDOR, no uno local: asi dos PCs del mismo
             // gimnasio hablan de la misma persona con el mismo numero. El uid 0 o negativo
             // no existe del lado del servidor, pero si llegara, se le da uno nuevo para no
@@ -95,12 +101,39 @@ public sealed class LocalFileStore : ITemplateStore
             {
                 var uid = t.Uid > 0 ? t.Uid : siguiente;
                 siguiente = Math.Max(siguiente, uid) + 1;
-                lista.Add(new StoredTemplate { ClienteId = t.ClienteId, Uid = uid, Template = t.Template });
+                // El dedo viaja: sin esto los dos dedos de una persona quedaban como "1" y
+                // re-enrolar el principal podía pisar el de respaldo.
+                lista.Add(new StoredTemplate { ClienteId = t.ClienteId, Uid = uid, Template = t.Template, Dedo = t.Dedo });
             }
 
             db[tenantId] = lista;
             await WriteAllAsync(db);
             Interlocked.Increment(ref _version);   // invalida la DB cacheada del SDK
+            return true;
+        }
+        finally { _lock.Release(); }
+    }
+
+    private static bool MismoContenido(List<StoredTemplate> a, IReadOnlyList<StoredTemplate> b)
+    {
+        if (a.Count != b.Count) return false;
+        static string Clave(StoredTemplate t) => $"{t.ClienteId}|{t.Uid}|{t.Dedo}|{t.Template}";
+        return a.Select(Clave).OrderBy(x => x, StringComparer.Ordinal)
+                .SequenceEqual(b.Select(Clave).OrderBy(x => x, StringComparer.Ordinal), StringComparer.Ordinal);
+    }
+
+    public async Task<int> QuitarAsync(string tenantId, string clienteId, int? dedo = null)
+    {
+        await _lock.WaitAsync();
+        try
+        {
+            var db = await ReadAllAsync();
+            if (!db.TryGetValue(tenantId, out var list)) return 0;
+            var sacadas = list.RemoveAll(t => t.ClienteId == clienteId && (dedo is null || t.Dedo == dedo));
+            if (sacadas == 0) return 0;
+            await WriteAllAsync(db);
+            Interlocked.Increment(ref _version);   // la huella borrada deja de abrir YA
+            return sacadas;
         }
         finally { _lock.Release(); }
     }

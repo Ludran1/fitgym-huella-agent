@@ -62,6 +62,36 @@ public class ContractTests
         Assert.Equal(HttpStatusCode.RequestTimeout, res.StatusCode);   // 408
     }
 
+    /// <summary>
+    /// El mismo dedo no puede quedar a nombre de dos personas. Hasta la v1.6.0 se aceptaba,
+    /// y en la puerta la persona entraba como cualquiera de las dos: un socio vencido podía
+    /// registrar su dedo en la ficha de uno con plan activo y entrar gratis.
+    /// </summary>
+    [Fact]
+    public async Task Un_dedo_que_ya_es_de_otra_persona_no_se_enrola()
+    {
+        using var f = new AgentFactory();
+        var client = f.CreateClient();
+        const string mismasCapturas = "\"template1\":\"t1\",\"template2\":\"t2\",\"template3\":\"t3\"}";
+
+        var ana = await client.PostAsync("/api/fingerprint/enroll",
+            Json("{\"cliente_id\":\"ana\",\"tenant_id\":\"gym\"," + mismasCapturas));
+        Assert.Equal(HttpStatusCode.OK, ana.StatusCode);
+
+        // Otra persona, el MISMO dedo → 409 diciendo de quién es.
+        var beto = await client.PostAsync("/api/fingerprint/enroll",
+            Json("{\"cliente_id\":\"beto\",\"tenant_id\":\"gym\"," + mismasCapturas));
+        Assert.Equal(HttpStatusCode.Conflict, beto.StatusCode);
+        var cuerpo = await beto.Content.ReadAsStringAsync();
+        Assert.Contains("huella_de_otra_persona", cuerpo);
+        Assert.Contains("\"cliente_id\":\"ana\"", cuerpo);
+
+        // La MISMA persona re-enrolando su dedo, sí.
+        var anaOtraVez = await client.PostAsync("/api/fingerprint/enroll",
+            Json("{\"cliente_id\":\"ana\",\"tenant_id\":\"gym\"," + mismasCapturas));
+        Assert.Equal(HttpStatusCode.OK, anaOtraVez.StatusCode);
+    }
+
     [Fact]
     public async Task Enroll_assigns_uids_reuses_on_reenroll_and_isolates_tenants()
     {
@@ -179,7 +209,9 @@ public class ContractTests
     private static async Task<int> Enroll(HttpClient client, string clienteId, string tenantId)
     {
         var raw = $"{{\"cliente_id\":\"{clienteId}\",\"tenant_id\":\"{tenantId}\"," +
-                  "\"template1\":\"t1\",\"template2\":\"t2\",\"template3\":\"t3\"}";
+                  // Capturas propias de cada persona: con las mismas, el agente (bien) las
+                  // rechaza como el mismo dedo a nombre de dos.
+                  $"\"template1\":\"t1-{clienteId}\",\"template2\":\"t2-{clienteId}\",\"template3\":\"t3-{clienteId}\"}}";
         var res = await client.PostAsync("/api/fingerprint/enroll", Json(raw));
         Assert.Equal(HttpStatusCode.OK, res.StatusCode);
         var body = await ReadJson(res);

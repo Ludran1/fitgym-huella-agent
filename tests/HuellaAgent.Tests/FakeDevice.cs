@@ -72,8 +72,19 @@ public sealed class FakeDevice : IFingerprintDevice
     /// <summary>Para probar que un Match roto no tumba la captura (el puntaje es auxiliar).</summary>
     public bool MatchThrows { get; set; }
 
-    public int Match(string template1, string template2) =>
-        MatchThrows ? throw new InvalidOperationException("template invalido") : MatchScore;
+    /// <summary>
+    /// Puntaje entre una huella recién enrolada y una ya guardada (el chequeo de "¿este dedo
+    /// es de otra persona?"). null = realista: coinciden sólo si son la misma plantilla.
+    /// </summary>
+    public int? ScoreContraGuardadas { get; set; }
+
+    public int Match(string template1, string template2)
+    {
+        if (MatchThrows) throw new InvalidOperationException("template invalido");
+        if (template1.StartsWith("MERGED::") || template2.StartsWith("MERGED::"))
+            return ScoreContraGuardadas ?? (template1 == template2 ? 1000 : 0);
+        return MatchScore;
+    }
 
     public IdentifyMatch? Identify(string probeTemplate, IReadOnlyList<StoredTemplate> db, string dbKey)
     {

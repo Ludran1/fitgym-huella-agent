@@ -95,6 +95,27 @@ public sealed class LatidoService : BackgroundService
         // casos NO se toca nada: el agente se queda con lo último que sabía. Ni un corte de
         // internet ni una tabla vacía pueden apagarle la puerta a un gimnasio.
 
+        // ── 1b. Volver a bajar las huellas ───────────────────────────────────────
+        // Hasta la v1.6.0 se bajaban SÓLO al arrancar. Una huella borrada en el panel
+        // seguía abriendo la puerta hasta el próximo reinicio, y una enrolada desde otra
+        // PC no llegaba a recepción. Si no cambió nada, ReemplazarAsync no toca nada.
+        try
+        {
+            var tpl = await _rpc.TemplatesAsync(ct);
+            if (tpl is not null)
+            {
+                var antes = await _store.CountAsync(tpl.TenantId);
+                if (await _store.ReemplazarAsync(tpl.TenantId, tpl.Templates))
+                    _log.LogInformation("Huellas actualizadas desde el servidor: {Ahora} (antes {Antes})",
+                        tpl.Templates.Count, antes);
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Sin internet: se queda con las que tiene. Nunca vacía la lista.
+            _log.LogWarning("No se pudieron actualizar las huellas: {Msg}", ex.Message);
+        }
+
         // ── 2. Contar cómo estamos ───────────────────────────────────────────────
         var vigente = _gym.Actual;
         // El registro: hasta 1000 líneas por latido (el mismo tope que pone el servidor).

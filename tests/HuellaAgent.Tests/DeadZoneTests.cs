@@ -26,7 +26,9 @@ public class DeadZoneTests
     private static async Task Enroll(HttpClient client, string clienteId, string tenantId)
     {
         var raw = $"{{\"cliente_id\":\"{clienteId}\",\"tenant_id\":\"{tenantId}\"," +
-                  "\"template1\":\"t1\",\"template2\":\"t2\",\"template3\":\"t3\"}";
+                  // Capturas propias de cada persona: con las mismas, el agente (bien)
+                  // las rechaza como el mismo dedo a nombre de dos.
+                  $"\"template1\":\"t1-{clienteId}\",\"template2\":\"t2-{clienteId}\",\"template3\":\"t3-{clienteId}\"}}";
         var res = await client.PostAsync("/api/fingerprint/enroll", Json(raw));
         Assert.Equal(HttpStatusCode.OK, res.StatusCode);
     }

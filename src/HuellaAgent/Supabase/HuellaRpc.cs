@@ -192,6 +192,7 @@ public sealed class HuellaRpc
             ClienteId = r.cliente_id ?? "",
             Uid = r.uid,
             Template = r.template ?? "",
+            Dedo = r.dedo is 1 or 2 ? r.dedo.Value : 1,
         }).ToList();
         return new TemplatesResult(payload.tenant_id, list);
     }
@@ -287,5 +288,5 @@ public sealed class HuellaRpc
     }
 
     private sealed record RpcTemplatesResponse(bool ok, string? tenant_id, List<RpcTemplate>? templates);
-    private sealed record RpcTemplate(string? cliente_id, int uid, string? template);
+    private sealed record RpcTemplate(string? cliente_id, int uid, string? template, int? dedo = null);
 }

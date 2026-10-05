@@ -26,6 +26,7 @@ public sealed record CaptureReq(int? Timeout, string[]? Previos);
 public sealed record EnrollReq(string ClienteId, string TenantId, string Template1, string Template2, string Template3,
                               int? Dedo = null, string? Etiqueta = null);
 public sealed record IdentifyReq(string TenantId);
+public sealed record OlvidarReq(string TenantId, string ClienteId, int? Dedo = null);
 public sealed record TurnstileReq(string TenantId);
 public sealed record PairReq(string Token, string SupabaseUrl, string AnonKey);
 
@@ -230,6 +231,40 @@ public static class FingerprintEndpoints
             catch (Exception ex) { return Results.Json(new { ok = false, detail = $"merge fallo: {ex.Message}" }, statusCode: 422); }
 
             var dedo = body.Dedo is 1 or 2 ? body.Dedo.Value : 1;
+
+            // ¿Este dedo ya es de OTRA persona? Hasta la v1.6.0 no se miraba: el lector
+            // quedaba con el mismo dedo a nombre de dos, y en la puerta entraba como
+            // cualquiera de los dos — un socio vencido podía registrar su dedo en la ficha
+            // de uno con plan activo y entrar gratis. Se compara contra todas las huellas
+            // del gym MENOS las de esta misma persona (re-enrolar o sumar el respaldo es
+            // válido), con la misma exigencia que la puerta.
+            //
+            // Con Match 1:1 contra cada una y no con Identify: Identify usa la base en memoria
+            // del SDK, la misma que usa la puerta, y armarla sin esta persona obligaba a
+            // rearmarla dos veces por enrolado. Enrolar pasa pocas veces al día; N
+            // comparaciones de ~0,1 ms cada una no se notan.
+            var otros = (await store.LoadAsync(body.TenantId)).Where(t => t.ClienteId != body.ClienteId);
+            StoredTemplate? dueno = null;
+            var mejor = 0;
+            foreach (var t in otros)
+            {
+                int s;
+                try { s = device.Match(merged, t.Template); } catch { continue; }   // un template roto no frena el enrolado
+                if (s > mejor) { mejor = s; dueno = t; }
+            }
+            if (dueno is not null && mejor >= cfg.IdentifyThreshold)
+            {
+                logEnroll.LogWarning("enroll RECHAZADO: el dedo ya esta registrado (uid={Uid} score={Score})", dueno.Uid, mejor);
+                return Results.Json(new
+                {
+                    ok = false,
+                    codigo = "huella_de_otra_persona",
+                    detail = "Esta huella ya está registrada a nombre de otra persona.",
+                    cliente_id = dueno.ClienteId,
+                    score = mejor,
+                }, statusCode: 409);
+            }
+
             var uid = await store.SaveAsync(body.TenantId, body.ClienteId, merged, dedo);
 
             // Persistencia durable. ANTES esto era "best-effort" e ignoraba el resultado:
@@ -257,6 +292,38 @@ public static class FingerprintEndpoints
                 return Results.Json(new { ok = false, detail = "Guardado en el lector pero NO en la nube: el lector esta vinculado a otro gym o el cliente no pertenece a este gym. Re-vincula el lector (Configuracion -> Lector de huella) y volve a enrolar." }, statusCode: 409);
 
             return Results.Json(new { ok = true, uid, durable = true, calidad = peor, pares });
+        });
+
+        // POST olvidar {tenant_id, cliente_id, dedo?} → saca la huella de ESTA PC al instante.
+        // El panel la borra del servidor y llama acá: las demás PCs se enteran en el
+        // próximo latido (5 min), ésta ya. Sin esto, una huella borrada seguía abriendo.
+        api.MapPost("/olvidar", async (OlvidarReq body, ITemplateStore store, ILoggerFactory lf) =>
+        {
+            if (string.IsNullOrWhiteSpace(body.TenantId) || string.IsNullOrWhiteSpace(body.ClienteId))
+                return Results.Json(new { ok = false, detail = "faltan campos" }, statusCode: 400);
+            var sacadas = await store.QuitarAsync(body.TenantId, body.ClienteId, body.Dedo is 1 or 2 ? body.Dedo : null);
+            lf.CreateLogger("Olvidar").LogInformation("olvidar: {N} huella(s) quitadas de esta PC", sacadas);
+            return Results.Json(new { ok = true, quitadas = sacadas });
+        });
+
+        // GET duplicadas?tenant_id= → pares de huellas de PERSONAS DISTINTAS que coinciden.
+        // Diagnóstico: el mismo dedo a nombre de dos hace que la puerta confunda a la gente.
+        // Compara todas contra todas (N²/2), así que tiene techo: es para correrlo a mano.
+        api.MapGet("/duplicadas", async (string tenant_id, IFingerprintDevice device, ITemplateStore store, AgentConfig cfg) =>
+        {
+            var db = await store.LoadAsync(tenant_id);
+            if (db.Count > 1500)
+                return Results.Json(new { ok = false, detail = $"demasiadas huellas para comparar todas contra todas ({db.Count})" }, statusCode: 400);
+            var pares = new List<object>();
+            for (var i = 0; i < db.Count; i++)
+                for (var j = i + 1; j < db.Count; j++)
+                {
+                    if (db[i].ClienteId == db[j].ClienteId) continue;
+                    var s = device.Match(db[i].Template, db[j].Template);
+                    if (s >= cfg.IdentifyThreshold)
+                        pares.Add(new { a = db[i].ClienteId, a_uid = db[i].Uid, b = db[j].ClienteId, b_uid = db[j].Uid, score = s });
+                }
+            return Results.Json(new { ok = true, revisadas = db.Count, umbral = cfg.IdentifyThreshold, duplicadas = pares });
         });
 
         // POST identify {tenant_id} → 200 {ok, cliente_id, score} · 404 sin match · 408 sin dedo

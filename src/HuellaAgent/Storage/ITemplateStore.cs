@@ -32,7 +32,13 @@ public interface ITemplateStore
     /// la consulta falla, TemplatesAsync devuelve null y no se toca nada — un corte de
     /// internet no puede vaciarle el lector a un gimnasio.
     /// </summary>
-    Task ReemplazarAsync(string tenantId, IReadOnlyList<StoredTemplate> templates);
+    /// <summary>true si la lista cambió. Si es igual no escribe ni sube la versión (la
+    /// DB del SDK no se rearma por nada cada 5 minutos).</summary>
+    Task<bool> ReemplazarAsync(string tenantId, IReadOnlyList<StoredTemplate> templates);
+
+    /// <summary>Saca las huellas de una persona (un dedo, o todos si <paramref name="dedo"/>
+    /// es null). Devuelve cuántas sacó.</summary>
+    Task<int> QuitarAsync(string tenantId, string clienteId, int? dedo = null);
 
     /// <summary>
     /// Cuantos templates hay cargados para ESE gimnasio (null = todos los del archivo).

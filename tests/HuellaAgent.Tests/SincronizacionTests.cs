@@ -146,9 +146,57 @@ public class SincronizacionTests : IDisposable
         await store.SaveAsync(Gym, "ana", "T-ANA");
         var antes = store.Version;
 
-        await store.ReemplazarAsync(Gym, new[] { T("ana", 1, "T-ANA") });
+        // Cambió el template (se re-enroló desde otra PC): tiene que invalidar.
+        Assert.True(await store.ReemplazarAsync(Gym, new[] { T("ana", 1, "T-ANA-NUEVA") }));
 
         Assert.True(store.Version > antes, "la DB del SDK no se iba a rearmar");
+    }
+
+    [Fact]
+    public async Task Reemplazar_con_lo_mismo_no_toca_nada()
+    {
+        // Desde la v1.6.1 se reemplaza en cada latido (5 min). Si el servidor dice lo mismo
+        // y aun así se subiera la versión, el SDK rearmaría su base cada 5 minutos.
+        var store = Store();
+        await store.ReemplazarAsync(Gym, new[] { T("ana", 1, "T-ANA") });
+        var antes = store.Version;
+
+        Assert.False(await store.ReemplazarAsync(Gym, new[] { T("ana", 1, "T-ANA") }));
+        Assert.Equal(antes, store.Version);
+    }
+
+    [Fact]
+    public async Task Reemplazar_conserva_que_dedo_es_cada_huella()
+    {
+        var store = Store();
+        await store.ReemplazarAsync(Gym, new[]
+        {
+            new StoredTemplate { ClienteId = "ana", Uid = 1, Template = "PRINCIPAL", Dedo = 1 },
+            new StoredTemplate { ClienteId = "ana", Uid = 2, Template = "RESPALDO", Dedo = 2 },
+        });
+
+        // Re-enrolar el principal no puede pisar el respaldo.
+        await store.SaveAsync(Gym, "ana", "PRINCIPAL-NUEVO", dedo: 1);
+        var todas = await store.LoadAsync(Gym);
+        Assert.Contains(todas, t => t.Dedo == 2 && t.Template == "RESPALDO");
+        Assert.Contains(todas, t => t.Dedo == 1 && t.Template == "PRINCIPAL-NUEVO");
+    }
+
+    [Fact]
+    public async Task Quitar_saca_la_huella_y_la_puerta_deja_de_usarla()
+    {
+        var store = Store();
+        await store.SaveAsync(Gym, "ana", "P", dedo: 1);
+        await store.SaveAsync(Gym, "ana", "R", dedo: 2);
+        await store.SaveAsync(Gym, "beto", "B");
+        var antes = store.Version;
+
+        Assert.Equal(1, await store.QuitarAsync(Gym, "ana", dedo: 2));
+        Assert.True(store.Version > antes);   // la DB del SDK se rearma: deja de abrir YA
+        Assert.Equal(2, (await store.LoadAsync(Gym)).Count);
+
+        Assert.Equal(1, await store.QuitarAsync(Gym, "ana"));   // sin dedo = todos los de ana
+        Assert.Single(await store.LoadAsync(Gym));
     }
 
     private const string OtroGym = "33333333-3333-3333-3333-333333333333";
