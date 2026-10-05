@@ -52,10 +52,16 @@ public static class PuertoRele
     /// existe: obedecer un dato que ya no apunta a nada no es respetar una decisión, es
     /// repetir un error. Ver el comentario de adentro.
     /// </summary>
-    public static PuertoElegido Elegir(string? configurado, Func<string[]>? puertos = null, Func<bool>? hayCh340 = null)
+    public static PuertoElegido Elegir(string? configurado, Func<string[]>? puertos = null, Func<bool>? hayCh340 = null,
+                                       Func<string[]>? puertosCh340 = null)
     {
         var lista = (puertos ?? SerialPort.GetPortNames)().Distinct().OrderBy(p => p).ToArray();
         var ch340 = (hayCh340 ?? HayCh340)();
+        // Qué puertos son, de verdad, de un CH340 enchufado AHORA. Ver PuertosDeCh340.
+        var delRele = (puertosCh340 ?? PuertosDeCh340)()
+            .Where(p => lista.Contains(p, StringComparer.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
 
         var aMano = configurado?.Trim();
         if (!string.IsNullOrWhiteSpace(aMano))
@@ -76,6 +82,9 @@ public static class PuertoRele
             if (lista.Length == 1)
                 return new PuertoElegido(lista[0], ch340 ? OrigenDelPuerto.Detectado : OrigenDelPuerto.Unico,
                     $"{aMano} ya no existe (Windows le cambia el numero al reenchufarlo); se detecto {lista[0]}");
+            if (delRele.Length == 1)
+                return new PuertoElegido(delRele[0], OrigenDelPuerto.Detectado,
+                    $"{aMano} ya no existe; el relé (CH340) está en {delRele[0]}");
         }
 
         if (lista.Length == 0)
@@ -88,8 +97,18 @@ public static class PuertoRele
                 ? new PuertoElegido(lista[0], OrigenDelPuerto.Detectado, $"único puerto serie y hay un CH340 enchufado ({lista[0]})")
                 : new PuertoElegido(lista[0], OrigenDelPuerto.Unico, $"único puerto serie, pero no se confirmó que sea el relé ({lista[0]})");
 
-        // Varios puertos: elegir uno seria adivinar, y adivinar mal significa escribirle
-        // bytes a otro aparato. Que lo diga una persona.
+        // Varios puertos, pero UNO solo es de un CH340 enchufado: ése es el relé. No es
+        // adivinar — Windows dice de qué aparato es cada puerto. Visto el 05-oct en
+        // recepción: 8 puertos serie (COM1, COM3 a COM9) y el relé en COM9. El puerto
+        // estaba escrito a mano en el appsettings de la instalación vieja y se perdió con
+        // el instalador nuevo; la puerta quedó sin abrir.
+        if (delRele.Length == 1)
+            return new PuertoElegido(delRele[0], OrigenDelPuerto.Detectado,
+                $"hay {lista.Length} puertos serie y el relé (CH340) está en {delRele[0]}");
+
+        // Varios puertos y ninguno (o más de uno) es de un CH340: elegir uno seria
+        // adivinar, y adivinar mal significa escribirle bytes a otro aparato. Que lo diga
+        // una persona.
         return new PuertoElegido(null, OrigenDelPuerto.Ninguno,
             $"hay {lista.Length} puertos serie ({string.Join(", ", lista)}): escribí cuál es el del relé en RelayPort");
     }
@@ -112,6 +131,37 @@ public static class PuertoRele
     /// true = hay un CH340 presente. En Linux/CI devuelve false sin intentar nada: el
     /// torniquete es Windows-only y ahí siempre corre el MockRelay.
     /// </summary>
+    /// <summary>
+    /// Los puertos COM de los CH340 enchufados AHORA. Windows guarda el número de puerto de
+    /// cada dispositivo USB en Enum\USB\{id}\Device Parameters\PortName; se leen sólo los
+    /// de los dispositivos presentes, porque el registro también guarda los de USB donde
+    /// el relé estuvo enchufado antes (en la PC de Adriano: COM4 viejo y COM3 actual).
+    /// </summary>
+    public static string[] PuertosDeCh340()
+    {
+        if (!OperatingSystem.IsWindows()) return Array.Empty<string>();
+        try
+        {
+            const int flags = CM_GETIDLIST_FILTER_ENUMERATOR | CM_GETIDLIST_FILTER_PRESENT;
+            if (CM_Get_Device_ID_List_SizeW(out int len, "USB", flags) != CR_SUCCESS || len <= 1) return Array.Empty<string>();
+            var buf = new char[len];
+            if (CM_Get_Device_ID_ListW("USB", buf, len, flags) != CR_SUCCESS) return Array.Empty<string>();
+            var puertos = new List<string>();
+            foreach (var id in new string(buf).Split('\0', StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (!id.Contains(VidCh340, StringComparison.OrdinalIgnoreCase)) continue;
+                using var k = Microsoft.Win32.Registry.LocalMachine.OpenSubKey($@"SYSTEM\CurrentControlSet\Enum\{id}\Device Parameters");
+                if (k?.GetValue("PortName") is string p && p.StartsWith("COM", StringComparison.OrdinalIgnoreCase))
+                    puertos.Add(p);
+            }
+            return puertos.ToArray();
+        }
+        catch
+        {
+            return Array.Empty<string>();   // sin poder leerlo, se vuelve a la regla de siempre
+        }
+    }
+
     public static bool HayCh340()
     {
         if (!OperatingSystem.IsWindows()) return false;

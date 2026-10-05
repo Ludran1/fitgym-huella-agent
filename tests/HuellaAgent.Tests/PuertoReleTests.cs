@@ -15,8 +15,43 @@ namespace HuellaAgent.Tests;
 /// </summary>
 public class PuertoReleTests
 {
-    private static PuertoElegido Elegir(string? configurado, string[] puertos, bool ch340) =>
-        PuertoRele.Elegir(configurado, () => puertos, () => ch340);
+    private static PuertoElegido Elegir(string? configurado, string[] puertos, bool ch340, string[]? delRele = null) =>
+        PuertoRele.Elegir(configurado, () => puertos, () => ch340, () => delRele ?? Array.Empty<string>());
+
+    /// <summary>
+    /// Recepción, 05-oct: 8 puertos serie y el relé en COM9. Windows dice de qué aparato es
+    /// cada puerto, así que no es adivinar: el del CH340 es el relé.
+    /// </summary>
+    [Fact]
+    public void Con_varios_puertos_elige_el_que_es_del_CH340()
+    {
+        var r = Elegir(null, new[] { "COM1", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9" }, true, new[] { "COM9" });
+        Assert.Equal("COM9", r.Port);
+        Assert.Equal(OrigenDelPuerto.Detectado, r.Origen);
+    }
+
+    [Fact]
+    public void Un_CH340_viejo_que_ya_no_esta_enchufado_no_cuenta()
+    {
+        // El registro guarda puertos de USB donde el relé estuvo antes: si ese COM no está
+        // entre los de ahora, no se lo elige.
+        var r = Elegir(null, new[] { "COM1", "COM3" }, false, new[] { "COM4" });
+        Assert.Null(r.Port);
+    }
+
+    [Fact]
+    public void Con_dos_CH340_enchufados_no_adivina()
+    {
+        var r = Elegir(null, new[] { "COM1", "COM3", "COM9" }, true, new[] { "COM3", "COM9" });
+        Assert.Null(r.Port);
+    }
+
+    [Fact]
+    public void Un_puerto_a_mano_que_ya_no_existe_cae_al_del_CH340()
+    {
+        var r = Elegir("COM5", new[] { "COM1", "COM3", "COM9" }, true, new[] { "COM9" });
+        Assert.Equal("COM9", r.Port);
+    }
 
     /// <summary>
     /// Lo escrito a mano gana, y es la salida para el gimnasio donde la detección no alcance
