@@ -39,14 +39,15 @@ public sealed class LatidoService : BackgroundService
     private readonly ConfigDelGimnasio _gym;
     private readonly AgentConfig _cfg;
     private readonly Bitacora _bitacora;
+    private readonly RegistroParaElServidor _registro;
     private readonly ILogger<LatidoService> _log;
 
     public LatidoService(HuellaRpc rpc, IFingerprintDevice device, ITemplateStore store,
                          FingerprintScanner scanner, IRelay relay, ConfigDelGimnasio gym,
-                         AgentConfig cfg, Bitacora bitacora, ILogger<LatidoService> log)
+                         AgentConfig cfg, Bitacora bitacora, RegistroParaElServidor registro, ILogger<LatidoService> log)
     {
         _rpc = rpc; _device = device; _store = store; _scanner = scanner;
-        _relay = relay; _gym = gym; _cfg = cfg; _bitacora = bitacora; _log = log;
+        _relay = relay; _gym = gym; _cfg = cfg; _bitacora = bitacora; _registro = registro; _log = log;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -96,6 +97,9 @@ public sealed class LatidoService : BackgroundService
 
         // ── 2. Contar cómo estamos ───────────────────────────────────────────────
         var vigente = _gym.Actual;
+        // El registro: hasta 1000 líneas por latido (el mismo tope que pone el servidor).
+        // Se sacan de la cola recién si el servidor las tomó.
+        var lineas = _registro.Pendientes(1000);
         var ok = await _rpc.LatidoAsync(Environment.MachineName, new
         {
             version = typeof(LatidoService).Assembly.GetName().Version?.ToString(3),
@@ -119,7 +123,17 @@ public sealed class LatidoService : BackgroundService
                 motivo = e.Motivo,
             }).ToArray(),
             boot_id = Api.FingerprintEndpoints.BootId,
+            registro = lineas.Select(l => new
+            {
+                t = l.EnUtc.ToString("o"),
+                n = l.Nivel,
+                m = l.Mensaje,
+                r = l.Repeticiones,
+                h = l.HastaUtc?.ToString("o"),
+            }).ToArray(),
         }, ct);
+
+        if (ok) _registro.Confirmar(lineas);
 
         if (!ok) _log.LogDebug("Latido: el servidor no lo tomó (sigue andando igual)");
     }

@@ -35,6 +35,8 @@ builder.Services.AddSingleton(sp => AgentConfig.Load(sp.GetRequiredService<IConf
 // GET /logs. `shared:true` permite que /logs lea mientras el agente escribe.
 var logsDir = Path.Combine(Path.GetDirectoryName(bootCfg.StoragePath) ?? ".", "logs");
 try { Directory.CreateDirectory(logsDir); } catch { /* si falla, igual loguea a consola */ }
+// Lo que viaja al servidor en el latido (lector_registros, 48 h). Ver RegistroParaElServidor.
+var registroParaElServidor = new HuellaAgent.Devices.RegistroParaElServidor();
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Information()
     .MinimumLevel.Override("Microsoft.AspNetCore", Serilog.Events.LogEventLevel.Warning)
@@ -46,7 +48,9 @@ Log.Logger = new LoggerConfiguration()
         retainedFileCountLimit: 14,
         shared: true,
         outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
+    .WriteTo.Sink(registroParaElServidor)
     .CreateLogger();
+builder.Services.AddSingleton(registroParaElServidor);
 builder.Host.UseSerilog();
 
 // Correr como Windows Service en produccion (no-op fuera de Windows).
