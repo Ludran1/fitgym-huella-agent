@@ -303,13 +303,15 @@ public static class FingerprintEndpoints
         // ── POST /api/turnstile/open {tenant_id} (Fase 7, opcional) ─────────────────
         // NO es parte del contrato del frontend. El Kiosko lo llamaria DESPUES de que
         // kiosk_marcar_asistencia confirme una membresia valida (no abrir a morosos).
-        app.MapPost("/api/turnstile/open", async (TurnstileReq body, IRelay relay, AgentConfig cfg,
+        app.MapPost("/api/turnstile/open", async (TurnstileReq body, IRelay relay, ConfigDelGimnasio gym, AgentConfig cfg,
                                                   ILoggerFactory lf, CancellationToken ct) =>
         {
-            if (!cfg.TurnstileEnabled) return Results.Json(new { ok = false, detail = "torniquete deshabilitado" }, statusCode: 409);
+            // La config del GIMNASIO, no el appsettings: el mismo criterio que el relé.
+            var vigente = gym.Actual;
+            if (!vigente.TieneTorniquete) return Results.Json(new { ok = false, detail = "torniquete deshabilitado" }, statusCode: 409);
             try
             {
-                await relay.PulseAsync(cfg.RelayPulseMs, ct);
+                await relay.PulseAsync(vigente.PulsoMs, ct);
                 return Results.Json(new { ok = true });
             }
             catch (Exception ex)

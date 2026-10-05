@@ -90,13 +90,25 @@ builder.Services.AddSingleton<Bocina>();
 // super-admin sin entrar a la PC del gimnasio.
 builder.Services.AddSingleton<Bitacora>();
 builder.Services.AddHostedService<PorteroService>();
+// El relé sigue a la config DEL GIMNASIO (servidor), no sólo al appsettings de esta PC.
+// Ver ReleSegunGimnasio: hasta la v1.5.0 se elegía al arrancar mirando sólo el archivo.
 builder.Services.AddSingleton<IRelay>(sp =>
-    RelayFactory.Create(sp.GetRequiredService<AgentConfig>(), sp.GetRequiredService<ILoggerFactory>()));
+{
+    var cfg = sp.GetRequiredService<AgentConfig>();
+    var lf = sp.GetRequiredService<ILoggerFactory>();
+    return new ReleSegunGimnasio(
+        sp.GetRequiredService<ConfigDelGimnasio>(),
+        () => RelayFactory.CrearReal(cfg, lf),
+        new MockRelay(lf.CreateLogger<MockRelay>()));
+});
 builder.Services.AddSingleton<HuellaRpc>();
 
 // La configuracion VIGENTE del gimnasio. Arranca desde appsettings.json y la pisa el
 // servidor cuando contesta (huella_config). Ver ConfigDelGimnasio.
-builder.Services.AddSingleton<ConfigDelGimnasio>();
+builder.Services.AddSingleton(sp => new ConfigDelGimnasio(
+    sp.GetRequiredService<AgentConfig>(),
+    sp.GetRequiredService<ILogger<ConfigDelGimnasio>>(),
+    Path.Combine(Path.GetDirectoryName(sp.GetRequiredService<AgentConfig>().StoragePath) ?? ".", "config-gym.json")));
 
 // El latido: le cuenta al servidor como esta este lector y se baja la config del gimnasio.
 // Va SEPARADO del portero a proposito — no puede tocar el lector ni demorar una apertura.

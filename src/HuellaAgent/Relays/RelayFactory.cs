@@ -19,6 +19,16 @@ public static class RelayFactory
 
         if (!OperatingSystem.IsWindows() || !cfg.TurnstileEnabled)
             return new MockRelay(lf.CreateLogger<MockRelay>());
+        return CrearReal(cfg, lf);
+    }
+
+    /// <summary>
+    /// El relé real, sin preguntar si el gimnasio tiene torniquete: eso lo decide quien lo
+    /// usa. Lo llama ReleSegunGimnasio la primera vez que la config del gym dice que sí.
+    /// </summary>
+    public static IRelay CrearReal(AgentConfig cfg, ILoggerFactory lf)
+    {
+        var log = lf.CreateLogger("RelayFactory");
 
         // El puerto ya no hay que ir a buscarlo al Administrador de dispositivos: si no
         // esta configurado, se detecta. Era el ultimo dato de la instalacion que obligaba
