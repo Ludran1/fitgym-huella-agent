@@ -33,6 +33,36 @@ internal static class UsbPresencia
     /// true = hay al menos un dispositivo USB ZKTeco presente. Ante cualquier duda devuelve
     /// true: si no se puede preguntar, mejor no acusar al lector de estar desenchufado.
     /// </summary>
+    /// <summary>
+    /// El modelo según el identificador USB (PID), para cuando el SDK no lo dice. Visto el
+    /// 05-oct: el MISMO SLK20R se presentaba con su nombre en una PC y como "modelo
+    /// desconocido" en recepción — depende de la versión del driver. El PID no.
+    /// Sólo se nombran los PID verificados; el resto se informa con su número.
+    /// </summary>
+    public static string? ModeloPorUsb()
+    {
+        try
+        {
+            const int flags = CM_GETIDLIST_FILTER_ENUMERATOR | CM_GETIDLIST_FILTER_PRESENT;
+            if (CM_Get_Device_ID_List_SizeW(out int len, "USB", flags) != CR_SUCCESS || len <= 1) return null;
+            var buf = new char[len];
+            if (CM_Get_Device_ID_ListW("USB", buf, len, flags) != CR_SUCCESS) return null;
+            foreach (var id in new string(buf).Split('\0', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var i = id.IndexOf(VidZkteco + "&PID_", StringComparison.OrdinalIgnoreCase);
+                if (i < 0) continue;
+                var pid = id.Substring(i + VidZkteco.Length + 5, 4).ToUpperInvariant();
+                return pid switch
+                {
+                    "0120" => "SLK20R",            // verificado en la PC de Adriano, 05-oct
+                    _ => $"(USB PID {pid})",
+                };
+            }
+            return null;
+        }
+        catch { return null; }
+    }
+
     public static bool HayLector(string vid = VidZkteco)
     {
         try

@@ -23,11 +23,13 @@ public sealed class ReconnectingRelay : IRelay, IDisposable
     private IRelay? _rele;
     private DateTime _ultimoIntento = DateTime.MinValue;
 
-    public ReconnectingRelay(Func<IRelay> abrir, AgentConfig cfg, ILogger log)
+    /// <param name="puerto">El puerto que se va a usar de verdad. Desde que el puerto se
+    /// detecta solo, el de la config suele estar vacío y el log decía "Rele abierto en ".</param>
+    public ReconnectingRelay(Func<IRelay> abrir, AgentConfig cfg, ILogger log, string? puerto = null)
     {
         _abrir = abrir;
         _log = log;
-        _puerto = cfg.RelayPort;
+        _puerto = string.IsNullOrWhiteSpace(puerto) ? cfg.RelayPort : puerto;
         Intentar();   // primer intento al arrancar, para que /health diga algo util
     }
 

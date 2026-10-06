@@ -97,6 +97,7 @@ public sealed class ZkfpDevice : IFingerprintDevice, IDisposable
         // Modelo REAL del lector (parametro 1102), en vez de asumir SLK20R: el mismo SDK
         // maneja ZK9500, ZK6500 y ZK8500R, y al diagnosticar conviene saber cual hay.
         _modelo = LeerTexto(1102);
+        if (string.IsNullOrWhiteSpace(_modelo)) _modelo = UsbPresencia.ModeloPorUsb();
         _serie = LeerTexto(1103);
         ConnectedSinceUtc = DateTime.UtcNow;
     }

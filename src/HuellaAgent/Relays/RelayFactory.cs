@@ -48,6 +48,6 @@ public static class RelayFactory
 
         log.LogInformation("Torniquete: usando {Port} — {Motivo}", elegido.Port, elegido.Motivo);
         return new ReconnectingRelay(
-            () => new UsbRelay(elegido.Port, lf.CreateLogger<UsbRelay>()), cfg, log);
+            () => new UsbRelay(elegido.Port, lf.CreateLogger<UsbRelay>()), cfg, log, elegido.Port);
     }
 }

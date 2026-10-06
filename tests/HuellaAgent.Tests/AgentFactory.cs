@@ -20,6 +20,18 @@ namespace HuellaAgent.Tests;
 /// </summary>
 public sealed class AgentFactory : WebApplicationFactory<Program>
 {
+    // El archivo de log se decide en Program ANTES de que se apliquen los overrides de
+    // abajo (que llegan recién al build), así que con la config por defecto cada test
+    // escribía en %ProgramData%\HuellaAgent\logs — el registro REAL del agente de esa PC,
+    // que desde la v1.6.0 además viaja al servidor. Visto el 05-oct: "Portero: necesita el
+    // scanner continuo" varias veces por segundo, justo en las horas en que corrían los
+    // tests. Una variable de entorno sí llega a tiempo; los overrides de cada test la pisan.
+    static AgentFactory()
+    {
+        Environment.SetEnvironmentVariable("Agent__StoragePath",
+            Path.Combine(Path.GetTempPath(), "huella-agent-tests", "templates.json"));
+    }
+
     public FakeDevice Device { get; } = new();
     private readonly string _storagePath;
     private readonly string? _apiKey;
