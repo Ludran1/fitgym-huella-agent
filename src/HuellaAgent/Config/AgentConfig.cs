@@ -140,8 +140,14 @@ public sealed class AgentConfig
     /// Mientras este prendido, el panel NO debe pedir identify: /health anuncia
     /// `decide: "agente"` y el listener del navegador se apaga solo. Si los dos preguntaran
     /// se robarian el dedo y la puerta abriria dos veces.
+    ///
+    /// Prendido por defecto desde la v1.7 (07-oct). Hasta ahi venia apagado "hasta que cada
+    /// gym lo estrene", y el unico que lo estreno fue FITGYM: PUNTO CERO tenia el agente
+    /// instalado y igual decidia la pagina, que es mas lenta, no anota los dedos que no
+    /// reconoce y no funciona con el panel cerrado. Instalar el agente tiene que alcanzar.
+    /// El servidor (lector_config) lo puede seguir apagando para un gimnasio puntual.
     /// </summary>
-    public bool AutoDecide { get; init; } = false;
+    public bool AutoDecide { get; init; } = true;
 
     /// <summary>Anti-rebote del portero: el mismo dedo apoyado no vuelve a pedir veredicto.</summary>
     public int AutoDecideDedupSeconds { get; init; } = 6;

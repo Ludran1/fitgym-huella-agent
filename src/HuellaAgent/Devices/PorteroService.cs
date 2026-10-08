@@ -132,7 +132,8 @@ public sealed class PorteroService : BackgroundService
                 _log.LogInformation("Portero: pasa {Nombre} ({Tipo}{YaHoy}) score={Score}",
                     veredicto.Nombre, veredicto.Tipo, veredicto.YaHoy ? ", ya habia entrado hoy" : "", match.Score);
                 _bitacora.Anotar("paso", veredicto.Nombre, match.Score, veredicto.Tipo);
-                _bocina.Ok();
+                // El equipo suena distinto y más bajo: recepción sabe sin mirar que no fue un socio.
+                if (veredicto.Tipo == "staff") _bocina.Equipo(); else _bocina.Ok();
 
                 if (!_gym.Actual.TieneTorniquete) continue;   // gym sin torniquete: solo se registra
                 await AbrirSinJugarseElPortero(stoppingToken);

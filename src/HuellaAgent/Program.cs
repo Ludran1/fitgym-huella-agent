@@ -86,8 +86,8 @@ builder.Services.AddSingleton<IFingerprintDevice>(sp =>
 // MISMA instancia que inyectan los endpoints es la que corre el loop.
 builder.Services.AddSingleton<FingerprintScanner>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<FingerprintScanner>());
-// El portero (Agent:AutoDecide): el agente decide y abre sin navegador. Se apaga solo si
-// el flag está en false, que es el default hasta que cada gym lo estrene. La bocina es su
+// El portero (Agent:AutoDecide): el agente decide y abre sin navegador. Prendido por
+// defecto desde la v1.7; se apaga sólo si el servidor o el archivo lo ponen en false. La bocina es su
 // aviso sonoro: en la puerta no hay pantalla y el lector no tiene luz ni zumbador propios.
 builder.Services.AddSingleton<Bocina>();
 // Las ultimas decisiones del portero, que viajan en el latido para poder verlas desde
