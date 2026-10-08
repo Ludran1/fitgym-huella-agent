@@ -32,6 +32,19 @@ public class ContractTests
     }
 
     /// <summary>
+    /// Desde la v1.7 el agente decide por defecto. Pero uno SIN vincular no tiene a quién
+    /// preguntarle si alguien puede pasar: si dijera "agente", el panel dejaría de pedir
+    /// identify y nadie marcaría. Mientras no esté vinculado, decide el navegador.
+    /// </summary>
+    [Fact]
+    public async Task Health_sin_vincular_no_le_quita_la_decision_al_navegador()
+    {
+        using var f = new AgentFactory(continuousScan: true);
+        var body = await ReadJson(await f.CreateClient().GetAsync("/health"));
+        Assert.Equal("navegador", body.GetProperty("decide").GetString());
+    }
+
+    /// <summary>
     /// /capture devuelve el template y NADA MAS. Tenia un campo `quality` que no existia:
     /// ZkfpDevice devolvia 100 fijo y MockDevice 85 fijo, y nadie lo leia para decidir. Un
     /// numero que dice "calidad 100" tambien en un enrolado malo invita a confiar en el.

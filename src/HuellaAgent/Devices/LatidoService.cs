@@ -127,7 +127,8 @@ public sealed class LatidoService : BackgroundService
             lector_conectado = _device.IsConnected,
             dispositivo = _device.DeviceName,
             huellas_cargadas = await _store.CountAsync(_rpc.TenantId),
-            decide = vigente.AbreSinNavegador && _scanner.Enabled ? "agente" : "navegador",
+            // Mismo criterio que /health: sin vínculo, el portero no decide.
+            decide = vigente.AbreSinNavegador && _scanner.Enabled && _rpc.TenantId is not null ? "agente" : "navegador",
             umbral = vigente.Umbral,
             // El ÚLTIMO estado conocido del relé, sin volver a abrir el puerto.
             torniquete = !vigente.TieneTorniquete ? "off" : _relay.IsConnected ? "ready" : "error",

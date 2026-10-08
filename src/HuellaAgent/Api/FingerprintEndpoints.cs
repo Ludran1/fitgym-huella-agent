@@ -83,7 +83,12 @@ public static class FingerprintEndpoints
                 // QUIÉN decide y abre. "agente" = el portero autónomo está activo y el panel
                 // tiene que dejar de pedir identify (si no, se roban el dedo y la puerta
                 // abre dos veces). "navegador" = como siempre.
-                decide = vigente.AbreSinNavegador && scanner.Enabled ? "agente" : "navegador",
+                //
+                // Sin vincular NO es "agente" aunque el flag esté prendido (lo está por
+                // defecto desde la v1.7): el portero no tiene a quién preguntarle y se queda
+                // esperando, así que si el panel también dejara de preguntar, nadie marcaría.
+                decide = vigente.AbreSinNavegador && scanner.Enabled && vinculo?.TenantId is not null
+                    ? "agente" : "navegador",
                 // Con que exigencia esta corriendo ESTE gym (escala 0-1000). Sin esto no
                 // habia forma de saber, sin entrar a la PC, si el umbral quedo calibrado.
                 threshold = vigente.Umbral,
