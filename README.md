@@ -1,8 +1,13 @@
 # huella-agent
 
-Agente local del lector de huella **ZKTeco SLK20R** para FitGym. Corre en la PC de
-recepción (Windows en producción), expone una API HTTP en `http://localhost:8000` y la
-consume el navegador del kiosko (`src/lib/huellaApi.ts`). Ver PRD vault doc 39.
+Agente local del lector de huella **ZKTeco SLK20R** para PeakGym. Corre en la PC de
+recepción (Windows en producción) y expone una API HTTP en `http://localhost:8000`, que el
+panel usa para registrar huellas, vincular la PC y mostrar el estado (`src/lib/huellaApi.ts`).
+
+> **Desde la v1.7 (09-oct-2026) el agente DECIDE SIEMPRE:** lee el dedo, le pregunta al
+> servidor (`registrar_acceso`) si la persona pasa, abre el torniquete y suena. El panel ya
+> no le pide dedos (se quitó la detección por página). Estado vigente, con diagnóstico por PC
+> y cómo publicar: vault `docs/ESTADO_agente_huella_v172_2026-10-09.md`.
 
 > **[docs/ARQUITECTURA.md](docs/ARQUITECTURA.md)** — cómo encaja cada capa, los dos flujos,
 > dónde viven las huellas, la lección del autostart y los riesgos abiertos.
