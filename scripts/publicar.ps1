@@ -160,6 +160,13 @@ if ($SinDriver) {
   $exeSetup = Join-Path $raiz "$Salida/PeakGym-Lector-Setup.exe"
   $exeVerSetup = (Get-Item $exeSetup).VersionInfo.ProductVersion
   if (-not "$exeVerSetup".StartsWith($version)) { Mal "el instalador dice $exeVerSetup y el csproj $version"; exit 1 }
+  # El mismo instalador con la versión en el nombre (pedido de Adriano, 09-oct): bajaba
+  # como "PeakGym-Lector-Setup (1).exe" y no había forma de saber si era uno nuevo. El
+  # panel enlaza éste (ver ultimaVersionAgente en el SPA). El de nombre fijo se sigue
+  # subiendo porque /releases/latest/download/PeakGym-Lector-Setup.exe es el link de
+  # respaldo y el que quedó en documentos y mensajes viejos.
+  $exeConVersion = Join-Path $raiz "$Salida/PeakGym-Lector-Setup-$version.exe"
+  Copy-Item $exeSetup $exeConVersion -Force
 }
 
 # ── 6. El ZIP de actualizacion ──────────────────────────────────────────────
@@ -176,11 +183,12 @@ Write-Host "LISTO  v$version" -ForegroundColor Green
 if (-not $SinDriver) {
   $mbExe = [math]::Round((Get-Item $exeSetup).Length / 1MB, 1)
   Write-Host "  instalador     $exeSetup  ($mbExe MB)" -ForegroundColor Green
+  Write-Host "  con versión    $exeConVersion" -ForegroundColor Green
 }
 Write-Host "  actualizacion  $zip  ($mb MB)" -ForegroundColor Green
 if ($SinDriver) { Write-Host "OJO: va SIN driver. No sirve para un gimnasio." -ForegroundColor Yellow }
 Write-Host ""
-Write-Host "Falta publicarlo en Ludran1/fitgym-huella-agent-dist, con LOS DOS archivos:" -ForegroundColor Gray
+Write-Host "Falta publicarlo en Ludran1/fitgym-huella-agent-dist, con LOS TRES archivos (los dos instaladores y el ZIP):" -ForegroundColor Gray
 Write-Host "  1. Tag v$version   <- si no coincide, launch.ps1 no actualiza a nadie." -ForegroundColor Gray
 Write-Host "  2. Marcalo como PRE-RELEASE." -ForegroundColor Yellow
 Write-Host "     /releases/latest ignora los pre-releases: ningun gimnasio lo va a tomar." -ForegroundColor Gray
