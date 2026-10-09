@@ -165,6 +165,35 @@ public class ReconexionTests
         Assert.Null(relay.LastError);
     }
 
+    /// <summary>
+    /// Visto el 09-oct en la PC de Adriano: el agente arrancó sin el relé enchufado, después
+    /// se lo conectó (Windows lo mostraba como CH340 en COM4) y /health seguía diciendo "no hay
+    /// ningún puerto serie". La detección corría una sola vez, al arrancar.
+    /// </summary>
+    [Fact]
+    public async Task El_rele_enchufado_despues_de_arrancar_se_detecta_sin_reiniciar()
+    {
+        var cfg = new AgentConfig { TurnstileEnabled = true };
+        var enchufado = false;
+        string? abiertoEn = null;
+        var relay = RelayFactory.CrearReal(cfg, NullLoggerFactory.Instance,
+            elegir: () => enchufado
+                ? new PuertoElegido("COM4", OrigenDelPuerto.Detectado, "único puerto serie y hay un CH340 enchufado (COM4)")
+                : new PuertoElegido(null, OrigenDelPuerto.Ninguno, "no hay ningún puerto serie: el módulo del relé no está enchufado"),
+            crear: port => { abiertoEn = port; return new FakeRelay(); });
+
+        Assert.False(relay.IsConnected);
+        // Sin ": " adelante: el puerto todavía no se conoce.
+        Assert.StartsWith("no hay puerto para el relé", relay.LastError);
+
+        enchufado = true;                       // alguien conecta el relé con el agente vivo
+        await relay.PulseAsync(700, CancellationToken.None);
+
+        Assert.True(relay.IsConnected);
+        Assert.Equal("COM4", abiertoEn);
+        Assert.Null(relay.LastError);
+    }
+
     private sealed class FakeRelay : IRelay
     {
         public bool IsConnected => true;

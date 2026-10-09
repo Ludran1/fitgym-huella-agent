@@ -25,29 +25,44 @@ public static class RelayFactory
     /// <summary>
     /// El relé real, sin preguntar si el gimnasio tiene torniquete: eso lo decide quien lo
     /// usa. Lo llama ReleSegunGimnasio la primera vez que la config del gym dice que sí.
+    ///
+    /// El puerto se elige en CADA intento de abrir, no una sola vez al crearlo. Hasta la
+    /// v1.7.1 se elegía acá arriba y quedaba fijo adentro del reintento: si el relé no estaba
+    /// enchufado cuando arrancó el agente, cada intento repetía "no hay ningún puerto serie"
+    /// aunque Windows ya mostrara el CH340 en COM4 —visto el 09-oct en la PC de Adriano—, y
+    /// la promesa de ReconnectingRelay ("enchufarlo con el agente corriendo alcanza") no se
+    /// cumplía. Lo mismo si Windows le cambia el número al reenchufarlo.
     /// </summary>
-    public static IRelay CrearReal(AgentConfig cfg, ILoggerFactory lf)
+    /// <param name="elegir">Para los tests: qué puerto elige la detección. Por defecto, PuertoRele.</param>
+    /// <param name="crear">Para los tests: cómo se abre el relé en un puerto. Por defecto, UsbRelay.</param>
+    public static IRelay CrearReal(AgentConfig cfg, ILoggerFactory lf,
+                                   Func<PuertoElegido>? elegir = null, Func<string, IRelay>? crear = null)
     {
         var log = lf.CreateLogger("RelayFactory");
-
         // El puerto ya no hay que ir a buscarlo al Administrador de dispositivos: si no
         // esta configurado, se detecta. Era el ultimo dato de la instalacion que obligaba
         // a que alguien fuera hasta la PC (ver PuertoRele y HU-17 del PRD 103).
-        var elegido = PuertoRele.Elegir(cfg.RelayPort);
-        if (elegido.Port is null)
-        {
-            // Sin puerto NO se cae al MockRelay: ese fue el bug del 17-sep, un rele de
-            // mentira contestando ok a cada apertura mientras la puerta no abria. Se
-            // devuelve el rele real igual, que va a fallar al conectar y lo va a DECIR en
-            // /health con este motivo al lado.
-            log.LogWarning("Torniquete: no se pudo determinar el puerto del rele ({Motivo})", elegido.Motivo);
-            return new ReconnectingRelay(
-                () => throw new InvalidOperationException($"no hay puerto para el rele: {elegido.Motivo}"),
-                cfg, log);
-        }
+        elegir ??= () => PuertoRele.Elegir(cfg.RelayPort);
+        crear ??= port => new UsbRelay(port, lf.CreateLogger<UsbRelay>());
+        string? ultimoMotivo = null;   // para no repetir el mismo aviso en cada reintento
 
-        log.LogInformation("Torniquete: usando {Port} — {Motivo}", elegido.Port, elegido.Motivo);
-        return new ReconnectingRelay(
-            () => new UsbRelay(elegido.Port, lf.CreateLogger<UsbRelay>()), cfg, log, elegido.Port);
+        return new ReconnectingRelay(() =>
+        {
+            var elegido = elegir();
+            if (elegido.Port is null)
+            {
+                // Sin puerto NO se cae al MockRelay: ese fue el bug del 17-sep, un rele de
+                // mentira contestando ok a cada apertura mientras la puerta no abria. Falla,
+                // y lo DICE en /health con este motivo.
+                if (ultimoMotivo != elegido.Motivo)
+                    log.LogWarning("Torniquete: no se pudo determinar el puerto del rele ({Motivo})", elegido.Motivo);
+                ultimoMotivo = elegido.Motivo;
+                throw new InvalidOperationException($"no hay puerto para el relé: {elegido.Motivo}");
+            }
+            if (ultimoMotivo != elegido.Motivo)
+                log.LogInformation("Torniquete: usando {Port} — {Motivo}", elegido.Port, elegido.Motivo);
+            ultimoMotivo = elegido.Motivo;
+            return crear(elegido.Port);
+        }, cfg, log);
     }
 }

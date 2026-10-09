@@ -66,7 +66,7 @@ public sealed class ReconnectingRelay : IRelay, IDisposable
             }
             catch (Exception ex)
             {
-                LastError = $"{_puerto}: {ex.Message}";
+                LastError = ConPuerto(ex.Message);
                 _log.LogWarning("No se pudo abrir el rele en {Puerto}: {Msg}", _puerto, ex.Message);
                 return false;
             }
@@ -97,10 +97,15 @@ public sealed class ReconnectingRelay : IRelay, IDisposable
         {
             // Se desenchufo con el agente corriendo: soltarlo para reabrirlo en el proximo
             // pulso, y que este falle con el motivo en vez de darse por bueno.
-            lock (_gate) { LastError = $"{_puerto}: {ex.Message}"; Cerrar(); }
+            lock (_gate) { LastError = ConPuerto(ex.Message); Cerrar(); }
             throw;
         }
     }
+
+    // Con el puerto adelante si se sabe. Desde que se detecta en cada intento (RelayFactory)
+    // casi nunca se sabe de antemano, y quedaba ": no hay puerto para el relé…" en la app.
+    private string ConPuerto(string motivo) =>
+        string.IsNullOrWhiteSpace(_puerto) ? motivo : $"{_puerto}: {motivo}";
 
     public void Dispose() { lock (_gate) Cerrar(); }
 }
