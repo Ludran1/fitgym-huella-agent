@@ -93,7 +93,14 @@ builder.Services.AddSingleton<Bocina>();
 // Las ultimas decisiones del portero, que viajan en el latido para poder verlas desde
 // super-admin sin entrar a la PC del gimnasio.
 builder.Services.AddSingleton<Bitacora>();
+// Lo que pasa en la puerta cuando el servidor decidió (aviso, torniquete, bitácora). La
+// comparten la huella y el lector QR, y atiende de a uno.
+builder.Services.AddSingleton<Puerta>();
 builder.Services.AddHostedService<PorteroService>();
+// El lector QR de mostrador en modo COM (v1.8): misma decisión y misma puerta que la huella,
+// por su propio camino. Singleton + hosted service, como el scanner: /health lee su estado.
+builder.Services.AddSingleton<HuellaAgent.Qr.LectorQrService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<HuellaAgent.Qr.LectorQrService>());
 // El relé sigue a la config DEL GIMNASIO (servidor), no sólo al appsettings de esta PC.
 // Ver ReleSegunGimnasio: hasta la v1.5.0 se elegía al arrancar mirando sólo el archivo.
 builder.Services.AddSingleton<IRelay>(sp =>

@@ -53,6 +53,10 @@ public sealed class AgentFactory : WebApplicationFactory<Program>
                 ["Agent:StoragePath"] = _storagePath,
                 ["Agent:IdentifyTimeoutSeconds"] = "1",
                 ["Agent:ContinuousScan"] = _continuousScan ? "true" : "false",
+                // El lector QR abriría un lector de verdad si hay uno enchufado en la PC donde
+                // corren los tests —y se lo sacaría al agente instalado—. Los tests lo prueban
+                // por partes, sin hardware (LectorQrTests).
+                ["Agent:QrEnabled"] = "false",
             };
             if (_apiKey is not null) overrides["Agent:ApiKey"] = _apiKey;
             cfg.AddInMemoryCollection(overrides);

@@ -27,9 +27,12 @@ public sealed class Bitacora
     /// Que paso, en una palabra: <c>paso</c>, <c>sin_coincidencia</c>, <c>rechazado</c>,
     /// <c>sin_servidor</c>, <c>rele_no_abrio</c>, <c>rele_colgado</c>.
     /// </param>
-    public void Anotar(string que, string? quien = null, int? score = null, string? motivo = null)
+    /// <param name="metodo">
+    /// Por dónde llegó: <c>huella</c> o <c>qr</c> (desde la v1.8 la puerta la usan los dos).
+    /// </param>
+    public void Anotar(string que, string? quien = null, int? score = null, string? motivo = null, string? metodo = null)
     {
-        var e = new Evento(DateTime.UtcNow, que, quien, score, motivo);
+        var e = new Evento(DateTime.UtcNow, que, quien, score, motivo, metodo);
         lock (_gate)
         {
             _cola.Enqueue(e);
@@ -48,5 +51,5 @@ public sealed class Bitacora
     /// panel, y sin nombre la pregunta util ("¿por que a Juan no le abre?") no se contesta.
     /// Nunca viaja el template ni el id de la persona.
     /// </param>
-    public sealed record Evento(DateTime EnUtc, string Que, string? Quien, int? Score, string? Motivo);
+    public sealed record Evento(DateTime EnUtc, string Que, string? Quien, int? Score, string? Motivo, string? Metodo = null);
 }

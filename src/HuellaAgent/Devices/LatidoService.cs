@@ -143,6 +143,7 @@ public sealed class LatidoService : BackgroundService
                 quien = e.Quien,
                 score = e.Score,
                 motivo = e.Motivo,
+                metodo = e.Metodo,
             }).ToArray(),
             boot_id = Api.FingerprintEndpoints.BootId,
             registro = lineas.Select(l => new

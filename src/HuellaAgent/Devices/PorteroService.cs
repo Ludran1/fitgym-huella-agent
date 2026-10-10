@@ -1,5 +1,4 @@
 using HuellaAgent.Config;
-using HuellaAgent.Relays;
 using HuellaAgent.Storage;
 using HuellaAgent.Supabase;
 
@@ -30,7 +29,7 @@ public sealed class PorteroService : BackgroundService
     private readonly IFingerprintDevice _device;
     private readonly ITemplateStore _store;
     private readonly HuellaRpc _rpc;
-    private readonly IRelay _relay;
+    private readonly Puerta _puerta;
     private readonly AgentConfig _cfg;
     private readonly ConfigDelGimnasio _gym;
     private readonly Bitacora _bitacora;
@@ -42,7 +41,7 @@ public sealed class PorteroService : BackgroundService
     private DateTime _ultimaVez = DateTime.MinValue;
 
     public PorteroService(FingerprintScanner scanner, IFingerprintDevice device, ITemplateStore store,
-                          HuellaRpc rpc, IRelay relay, Bocina bocina, AgentConfig cfg,
+                          HuellaRpc rpc, Puerta puerta, Bocina bocina, AgentConfig cfg,
                           ConfigDelGimnasio gym, Bitacora bitacora, ILogger<PorteroService> log)
     {
         _bitacora = bitacora;
@@ -51,7 +50,7 @@ public sealed class PorteroService : BackgroundService
         _device = device;
         _store = store;
         _rpc = rpc;
-        _relay = relay;
+        _puerta = puerta;
         _cfg = cfg;
         _gym = gym;
         _log = log;
@@ -99,7 +98,7 @@ public sealed class PorteroService : BackgroundService
                 if (match is null)
                 {
                     _log.LogInformation("Portero: dedo sin coincidencia ({Cuantas} huellas cargadas)", db.Count);
-                    _bitacora.Anotar("sin_coincidencia");
+                    _bitacora.Anotar("sin_coincidencia", metodo: "huella");
                     _bocina.Rechazo();   // nadie mas le va a avisar que no lo reconocio
                     continue;
                 }
@@ -110,33 +109,9 @@ public sealed class PorteroService : BackgroundService
                 if (EsRebote(entry.ClienteId)) continue;
 
                 var veredicto = await _rpc.RegistrarAccesoAsync(entry.ClienteId, "huella", match.Score, stoppingToken);
-                if (veredicto is null)
-                {
-                    // Sin veredicto no se abre. Es la decisión correcta mientras no exista la
-                    // copia local de vigencias: preferimos que el socio pase por recepción a
-                    // abrirle la puerta a cualquiera porque se cayó internet.
-                    _log.LogWarning("Portero: sin respuesta del servidor; NO se abre (score {Score})", match.Score);
-                    _bitacora.Anotar("sin_servidor", score: match.Score);
-                    continue;
-                }
-
-                if (!veredicto.AbrirPuerta)
-                {
-                    _log.LogInformation("Portero: {Nombre} NO pasa ({Motivo}) score={Score}",
-                        veredicto.Nombre ?? "(desconocido)", veredicto.Motivo, match.Score);
-                    _bitacora.Anotar("rechazado", veredicto.Nombre, match.Score, veredicto.Motivo);
-                    _bocina.Rechazo();
-                    continue;
-                }
-
-                _log.LogInformation("Portero: pasa {Nombre} ({Tipo}{YaHoy}) score={Score}",
-                    veredicto.Nombre, veredicto.Tipo, veredicto.YaHoy ? ", ya habia entrado hoy" : "", match.Score);
-                _bitacora.Anotar("paso", veredicto.Nombre, match.Score, veredicto.Tipo);
-                // El equipo suena distinto y más bajo: recepción sabe sin mirar que no fue un socio.
-                if (veredicto.Tipo == "staff") _bocina.Equipo(); else _bocina.Ok();
-
-                if (!_gym.Actual.TieneTorniquete) continue;   // gym sin torniquete: solo se registra
-                await AbrirSinJugarseElPortero(stoppingToken);
+                // Sonido, torniquete y bitácora: la Puerta, que comparte con el lector QR y
+                // atiende de a uno.
+                await _puerta.AtenderAsync(veredicto, "huella", match.Score, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
             catch (Exception ex)
@@ -146,48 +121,6 @@ public sealed class PorteroService : BackgroundService
             }
         }
     }
-
-
-    /// <summary>
-    /// Abre el torniquete sin arriesgar el portero.
-    ///
-    /// EL 26-SEP UN RELE COLGADO MATO AL PORTERO. `SerialPort.Write` es bloqueante y sin
-    /// timeout no vuelve nunca; como corre en ESTE hilo, el portero se quedo trabado ahi
-    /// para siempre: dejo de mirar dedos, sin un error en el log, mientras /health seguia
-    /// diciendo `turnstile: ready`. El sintoma que llego fue "cambie el lector y no abre".
-    ///
-    /// La causa ya esta arreglada donde corresponde (UsbRelay pone WriteTimeout). Esto es
-    /// la otra mitad: que NINGUNA falla de un periferico pueda volver a matar al portero,
-    /// la haya previsto yo o no. Un hilo abandonado es infinitamente mejor que una puerta
-    /// muerta, y con el timeout puesto no deberia pasar nunca.
-    ///
-    /// Va por Task.Run a proposito: PulseAsync escribe al puerto ANTES de su primer await,
-    /// asi que llamarlo directo ya bloquea a quien lo llama y el techo no llegaria a correr.
-    /// </summary>
-    private async Task AbrirSinJugarseElPortero(CancellationToken ct)
-    {
-        var pulso = Task.Run(() => _relay.PulseAsync(_gym.Actual.PulsoMs, ct), ct);
-        var techo = Task.Delay(TechoPulso, ct);
-
-        if (await Task.WhenAny(pulso, techo) == techo)
-        {
-            _log.LogError("Portero: el rele no contesto en {Seg}s; sigo atendiendo sin el",
-                TechoPulso.TotalSeconds);
-            _bitacora.Anotar("rele_colgado", motivo: $"no contesto en {TechoPulso.TotalSeconds:F0}s");
-            return;   // el pulso queda abandonado; el portero sigue vivo, que es lo que importa
-        }
-
-        try { await pulso; }
-        catch (Exception ex)
-        {
-            // La asistencia YA quedo registrada: que la puerta falle no debe borrarla.
-            _log.LogError(ex, "Portero: el acceso se concedio pero el rele no abrio");
-            _bitacora.Anotar("rele_no_abrio", motivo: ex.Message);
-        }
-    }
-
-    /// <summary>Techo del pulso: de sobra para 4 bytes a 9600 baudios (~4 ms).</summary>
-    private static readonly TimeSpan TechoPulso = TimeSpan.FromSeconds(5);
 
     private bool EsRebote(string personaId)
     {

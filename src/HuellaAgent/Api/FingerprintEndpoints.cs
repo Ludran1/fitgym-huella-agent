@@ -57,7 +57,7 @@ public static class FingerprintEndpoints
         // vinculado? ¿leyo algo alguna vez? ¿que fue lo ultimo que fallo? ¿se reinicio?
         app.MapGet("/health", async (IFingerprintDevice device, ITemplateStore store, HuellaRpc rpc,
                                      FingerprintScanner scanner, PairingStore pairing, IRelay relay,
-                                     AgentConfig cfg, ConfigDelGimnasio gym) =>
+                                     AgentConfig cfg, ConfigDelGimnasio gym, Qr.LectorQrService qr) =>
         {
             var vinculo = pairing.Load();
             // Lo que vale AHORA: puede venir del servidor (huella_config) o del archivo.
@@ -107,6 +107,16 @@ public static class FingerprintEndpoints
                 // "error" = esta configurado pero no se puede abrir (con el motivo al lado).
                 turnstile = !vigente.TieneTorniquete ? "off" : releOk ? "ready" : "error",
                 turnstile_error = vigente.TieneTorniquete ? relay.LastError : null,
+                // El lector QR de mostrador (v1.8). estado: "off" (apagado o no es Windows) ·
+                // "sin_lector" (no hay uno en modo COM; el motivo lista los puertos USB que no
+                // reconoció) · "listo" · "error" (estaba y dejó de leer).
+                qr = new
+                {
+                    estado = qr.Estado,
+                    puerto = qr.Puerto,
+                    motivo = qr.Motivo,
+                    ultima_lectura = qr.UltimaLecturaUtc,
+                },
                 version = Version,
             });
         });

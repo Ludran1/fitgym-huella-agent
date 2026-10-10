@@ -127,24 +127,36 @@ public sealed class HuellaRpc
     /// Es lo que permite que la puerta funcione con el navegador cerrado: hasta ahora
     /// quien decidía era la pestaña de Chrome.
     /// </summary>
-    public async Task<Veredicto?> RegistrarAccesoAsync(string personaId, string metodo, int? score, CancellationToken ct)
+    public Task<Veredicto?> RegistrarAccesoAsync(string personaId, string metodo, int? score, CancellationToken ct) =>
+        PedirVeredictoAsync("registrar_acceso",
+            c => new { p_token = c.Token, p_persona_id = personaId, p_metodo = metodo, p_score = score }, ct);
+
+    /// <summary>
+    /// registrar_acceso_qr(token, codigo) → el mismo juez, para el lector QR (v1.8, migración
+    /// 20261010160739). El agente no conoce los códigos —no se los baja, como sí las huellas—:
+    /// le manda al servidor lo que leyó, y el servidor busca de quién es y le pregunta a
+    /// registrar_acceso, o lo trata como invitación.
+    /// </summary>
+    public Task<Veredicto?> RegistrarAccesoQrAsync(string codigo, CancellationToken ct) =>
+        PedirVeredictoAsync("registrar_acceso_qr", c => new { p_token = c.Token, p_codigo = codigo }, ct);
+
+    private async Task<Veredicto?> PedirVeredictoAsync(string fn, Func<DurableCreds, object> cuerpo, CancellationToken ct)
     {
         var c = Creds();
         if (c is null) return null;
         try
         {
-                using var cts = ConTecho(TechoVeredicto, ct);
-            var resp = await _http.SendAsync(Req(c, "registrar_acceso",
-                new { p_token = c.Token, p_persona_id = personaId, p_metodo = metodo, p_score = score }), cts.Token);
+            using var cts = ConTecho(TechoVeredicto, ct);
+            var resp = await _http.SendAsync(Req(c, fn, cuerpo(c)), cts.Token);
             if (!resp.IsSuccessStatusCode)
             {
-                _log.LogWarning("registrar_acceso fallo: {S}", resp.StatusCode);
+                _log.LogWarning("{Fn} fallo: {S}", fn, resp.StatusCode);
                 return null;
             }
             var j = await resp.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: ct);
             if (!j.TryGetProperty("ok", out var ok) || !ok.GetBoolean())
             {
-                _log.LogWarning("registrar_acceso rechazo el token: {Detalle}",
+                _log.LogWarning("{Fn} rechazo el pedido: {Detalle}", fn,
                     j.TryGetProperty("detail", out var d) ? d.GetString() : "(sin detalle)");
                 return null;
             }
@@ -161,7 +173,7 @@ public sealed class HuellaRpc
         {
             // Sin internet o Supabase caído: el portero no puede decidir. Que lo resuelva
             // quien llama (hoy: no abrir; cuando exista la copia local, decidir con ella).
-            _log.LogWarning(ex, "registrar_acceso no respondio");
+            _log.LogWarning(ex, "{Fn} no respondio", fn);
             return null;
         }
     }

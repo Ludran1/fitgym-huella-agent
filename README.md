@@ -9,6 +9,11 @@ panel usa para registrar huellas, vincular la PC y mostrar el estado (`src/lib/h
 > no le pide dedos (se quitó la detección por página). Estado vigente, con diagnóstico por PC
 > y cómo publicar: vault `docs/ESTADO_agente_huella_v172_2026-10-09.md`.
 
+> **Desde la v1.8 (10-oct-2026) también lee el lector QR de mostrador**, si está en modo COM
+> (USB Virtual COM): el código va a `registrar_acceso_qr` y abre la misma puerta que la
+> huella, de a uno. En modo teclado el agente no lo ve y sólo lo escucha el Kiosko del panel.
+> Ver `src/HuellaAgent/Qr/` y la sección *Lector QR* más abajo.
+
 > **[docs/ARQUITECTURA.md](docs/ARQUITECTURA.md)** — cómo encaja cada capa, los dos flujos,
 > dónde viven las huellas, la lección del autostart y los riesgos abiertos.
 
@@ -145,6 +150,20 @@ es seguro.
 Módulo **USB-relé 1 canal** (entrada). Salida = botón mecánico directo al torniquete.
 `Agent:TurnstileEnabled = true` + `Agent:RelayPort = COMx`. Verificar bytes ON/OFF del
 módulo en `Relays/UsbRelay.cs`.
+
+## Lector QR de mostrador (v1.8, opcional)
+
+- **Modo COM, no teclado.** De fábrica el lector "tipea" el código y un Enter donde esté el
+  cursor; así sólo marca con el Kiosko abierto adelante. Se pasa a modo COM escaneando la
+  opción *USB Virtual COM* del manual (y se vuelve con *USB HID / Teclado*).
+- **Cuál es su puerto:** por el fabricante (`PuertoLectorQr.VidsConocidos`). Un aparato USB
+  que no reconoce NO lo abre aunque sea el único puerto (un puerto serie lo usa un programa
+  por vez); `/health` → `qr.motivo` lista los puertos sin reconocer para sumar su VID. A mano:
+  `Agent:QrPort = COMx`. Se apaga con `Agent:QrEnabled = false`.
+- **Relé y lector no se pisan:** la detección del relé no mira los puertos del lector.
+- **Lo que hace con un código:** `registrar_acceso_qr` (servidor) → `Puerta` (sonido +
+  torniquete + bitácora con `metodo: "qr"`), la misma que usa la huella, de a uno. Mismo
+  anti-rebote que la huella (`AutoDecideDedupSeconds`).
 
 ## Layout
 

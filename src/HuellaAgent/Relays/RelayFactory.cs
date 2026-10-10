@@ -42,7 +42,11 @@ public static class RelayFactory
         // El puerto ya no hay que ir a buscarlo al Administrador de dispositivos: si no
         // esta configurado, se detecta. Era el ultimo dato de la instalacion que obligaba
         // a que alguien fuera hasta la PC (ver PuertoRele y HU-17 del PRD 103).
-        elegir ??= () => PuertoRele.Elegir(cfg.RelayPort);
+        //
+        // Sin los puertos del lector QR (v1.8): con el lector en modo COM hay dos puertos
+        // serie, y la regla "el único puerto serie es el relé" agarraba el del lector.
+        elegir ??= () => PuertoRele.Elegir(cfg.RelayPort, () => Qr.PuertoLectorQr.SinLosDelLector(
+            System.IO.Ports.SerialPort.GetPortNames(), Qr.PuertosSerieUsb.Listar(), cfg.QrPort));
         crear ??= port => new UsbRelay(port, lf.CreateLogger<UsbRelay>());
         string? ultimoMotivo = null;   // para no repetir el mismo aviso en cada reintento
 

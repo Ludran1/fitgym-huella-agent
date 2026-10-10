@@ -45,6 +45,20 @@ public class ContractTests
     }
 
     /// <summary>
+    /// /health dice cómo está el lector QR (v1.8). En los tests va apagado a propósito: no
+    /// puede abrir un lector de verdad de la PC donde corren (ver AgentFactory).
+    /// </summary>
+    [Fact]
+    public async Task Health_dice_como_esta_el_lector_QR()
+    {
+        using var f = new AgentFactory();
+        var body = await ReadJson(await f.CreateClient().GetAsync("/health"));
+        var qr = body.GetProperty("qr");
+        Assert.Equal("off", qr.GetProperty("estado").GetString());
+        Assert.False(string.IsNullOrEmpty(qr.GetProperty("motivo").GetString()));
+    }
+
+    /// <summary>
     /// /capture devuelve el template y NADA MAS. Tenia un campo `quality` que no existia:
     /// ZkfpDevice devolvia 100 fijo y MockDevice 85 fijo, y nadie lo leia para decidir. Un
     /// numero que dice "calidad 100" tambien en un enrolado malo invita a confiar en el.

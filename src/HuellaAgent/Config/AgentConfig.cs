@@ -192,6 +192,20 @@ public sealed class AgentConfig
     /// <summary>Duracion del pulso de contacto seco, en ms (0.5-1s).</summary>
     public int RelayPulseMs { get; init; } = 700;
 
+    // ── Lector QR de mostrador (v1.8) ───────────────────────────────────────────
+
+    /// <summary>
+    /// El agente lee el lector QR en modo COM y decide como con la huella. Sin un lector
+    /// conocido enchufado no hace nada (no abre puertos de otros aparatos). Se apaga con false.
+    /// </summary>
+    public bool QrEnabled { get; init; } = true;
+
+    /// <summary>
+    /// Puerto del lector QR escrito a mano (ej. COM5), para un modelo que el agente no
+    /// reconoce solo. Vacío = se detecta por el fabricante. Ver PuertoLectorQr.
+    /// </summary>
+    public string QrPort { get; init; } = "";
+
     public static AgentConfig Load(IConfiguration cfg)
     {
         var a = new AgentConfig();
